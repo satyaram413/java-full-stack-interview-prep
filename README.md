@@ -2086,7 +2086,9 @@ Saga Orchestrator → commands → services → replies
 
 # Deep Dive
 
-> Use this section when the interviewer says *"go deeper"* or asks about **internals**. Each topic builds on the Q&A sections above with implementation detail, failure modes, and whiteboard-ready explanations.
+> Use this section when the interviewer says *"go deeper"* or asks about **internals**. Each topic builds on the Q&A sections above with implementation detail, failure modes, and interview-ready explanations.
+>
+> **Diagrams:** Mermaid blocks below render as visual flowcharts on **GitHub** and most modern Markdown viewers. ASCII blocks are kept as text fallback where noted.
 
 | Track | Topics | Typical trigger question |
 |-------|--------|--------------------------|
@@ -2106,16 +2108,51 @@ Saga Orchestrator → commands → services → replies
 
 #### Data structure (Java 8+)
 
+```mermaid
+flowchart TB
+    subgraph table["HashMap table[] — power-of-2 capacity"]
+        B0["[0] → null"]
+        B1["[1] → Node → Node → Node<br/>(linked list — collision chain)"]
+        B2["[2] → TreeNode<br/>(Red-Black Tree if bucket ≥ 8 and table ≥ 64)"]
+        B3["[3] → ..."]
+    end
+    Node["Each Node: hash | key | value | next"]
+    B1 --- Node
+```
+
+<details>
+<summary>ASCII fallback</summary>
+
 ```
 table[]  (Node<K,V>[] — power-of-2 capacity)
-  │
   ├─ [0] → null
   ├─ [1] → Node → Node → Node   (linked list, collision chain)
   ├─ [2] → TreeNode (Red-Black Tree, when bucket ≥ 8 and table ≥ 64)
   └─ ...
 ```
 
+</details>
+
 Each `Node` holds: `hash`, `key`, `value`, `next`.
+
+#### `put(key, value)` flow
+
+```mermaid
+flowchart TD
+    A["put(key, value)"] --> B["hash = spread(key.hashCode())"]
+    B --> C["index = (n - 1) & hash"]
+    C --> D{"Bucket empty?"}
+    D -->|Yes| E["Insert new Node"]
+    D -->|No| F{"Same hash + equals(key)?"}
+    F -->|Yes| G["Replace value"]
+    F -->|No| H["Walk list / tree → insert or treeify"]
+    E --> I{"size > threshold?"}
+    G --> I
+    H --> I
+    I -->|Yes| J["Resize 2× and rehash"]
+    I -->|No| K["Done"]
+    J --> K
+```
 
 #### `put(key, value)` step-by-step
 
@@ -2185,20 +2222,27 @@ Each `Node` holds: `hash`, `key`, `value`, `next`.
 
 #### Runtime memory layout
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    JVM Process                          │
-├────────────────────┬────────────────────────────────────┤
-│  Per-thread Stacks  │  Heap (shared)                     │
-│  - frame per method │  ┌─ Young Generation ─────────────┐  │
-│  - local vars       │  │ Eden │ S0 │ S1  (Survivors)   │  │
-│  - operand stack    │  └────────────────────────────────┘  │
-│                     │  Old Generation (Tenured)          │
-├────────────────────┴────────────────────────────────────┤
-│  Metaspace (class metadata, static — Java 8+)           │
-│  Code Cache (JIT compiled native code)                  │
-│  Direct / Off-heap (ByteBuffer, Netty)                  │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph JVM["JVM Process"]
+        subgraph stacks["Per-thread Stacks"]
+            S1["Frame per method call"]
+            S2["Local vars + operand stack"]
+        end
+        subgraph heap["Heap (shared)"]
+            subgraph young["Young Generation"]
+                Eden["Eden"]
+                S0["Survivor S0"]
+                S1b["Survivor S1"]
+            end
+            Old["Old Generation (Tenured)"]
+        end
+        Meta["Metaspace — class metadata"]
+        Code["Code Cache — JIT native code"]
+        Direct["Direct / Off-heap memory"]
+    end
+    Eden --> S0
+    S0 --> Old
 ```
 
 | Where | What lives | GC? |
@@ -2208,6 +2252,14 @@ Each `Node` holds: `hash`, `key`, `value`, `next`.
 | Metaspace | Class definitions, method metadata | Class unloading (rare) |
 
 #### Object allocation path
+
+```mermaid
+flowchart LR
+    New["new Object()"] --> Eden["Eden space"]
+    Eden -->|"Minor GC — live objects"| Survivor["Survivor S0 / S1<br/>(age counter++)"]
+    Survivor -->|"After ~15 cycles"| Old["Old Generation"]
+    Old -->|"Major / Full GC"| GC["Reclaim unreachable<br/>(STW pause)"]
+```
 
 1. **Eden** — new objects allocated here (bump-the-pointer, very fast)
 2. **Minor GC** — live objects copied to Survivor (S0/S1); age counter incremented
@@ -2280,6 +2332,20 @@ Connection conn = dataSource.getConnection(); // no try-with-resources
 > **Quick link from:** [Concurrency & Multithreading](#concurrency--multithreading)
 
 #### Happens-before rules (JMM)
+
+```mermaid
+flowchart LR
+    subgraph ThreadA["Thread A"]
+        A1["write volatile flag = false"]
+        A2["unlock monitor"]
+    end
+    subgraph ThreadB["Thread B"]
+        B1["lock monitor"]
+        B2["read volatile flag"]
+    end
+    A1 -.->|"happens-before"| B2
+    A2 -.->|"happens-before"| B1
+```
 
 If action A *happens-before* B, then A's effects are visible to B.
 
@@ -2380,8 +2446,15 @@ map.computeIfAbsent(k, key -> expensiveLoad(key));
 
 #### Class loading phases
 
-```
-Loading → Linking (verify, prepare, resolve) → Initialization
+```mermaid
+flowchart LR
+    L["Loading<br/>read .class bytes"] --> Link["Linking"]
+    Link --> V["Verify bytecode"]
+    Link --> P["Prepare static fields"]
+    Link --> R["Resolve symbols"]
+    V --> Init["Initialization<br/>run clinit"]
+    P --> Init
+    R --> Init
 ```
 
 | Phase | What happens |
@@ -2394,14 +2467,15 @@ Loading → Linking (verify, prepare, resolve) → Initialization
 
 #### Classloader hierarchy (delegation model)
 
-```
-Bootstrap ClassLoader (JDK core — java.lang.*)
-        ↑
-Extension/Platform ClassLoader (JDK extensions)
-        ↑
-Application ClassLoader (classpath — your app)
-        ↑
-Custom ClassLoaders (plugins, containers)
+```mermaid
+flowchart BT
+    Boot["Bootstrap ClassLoader<br/>JDK core — java.lang.*"]
+    Plat["Platform / Extension ClassLoader<br/>JDK extensions"]
+    App["Application ClassLoader<br/>your classpath"]
+    Custom["Custom ClassLoaders<br/>plugins, containers"]
+    Custom --> App
+    App --> Plat
+    Plat --> Boot
 ```
 
 **Delegation:** child asks parent first — prevents loading `java.lang.String` twice from different loaders.
@@ -2445,8 +2519,26 @@ Custom ClassLoaders (plugins, containers)
 
 Spring does **not** modify your class bytecode at compile time (by default). At runtime it wraps your bean in a **proxy**:
 
-```
-Client → Proxy (opens TX, calls target, commits/rolls back) → Your @Service bean
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Proxy as Spring Proxy
+    participant TX as TransactionManager
+    participant Bean as @Service Bean
+
+    Client->>Proxy: placeOrder(req)
+    Proxy->>TX: getTransaction()
+    TX-->>Proxy: TransactionStatus
+    Proxy->>Bean: placeOrder(req)
+    alt success
+        Bean-->>Proxy: result
+        Proxy->>TX: commit()
+        Proxy-->>Client: result
+    else RuntimeException
+        Bean-->>Proxy: throw
+        Proxy->>TX: rollback()
+        Proxy-->>Client: throw
+    end
 ```
 
 #### JDK dynamic proxy vs CGLIB
@@ -2478,6 +2570,21 @@ public Order placeOrder(CreateOrderRequest req) {
 ```
 
 #### Self-invocation trap (most common interview trap)
+
+```mermaid
+flowchart TB
+    subgraph broken["BROKEN — no transaction"]
+        C1["Client"] --> P1["Proxy"]
+        P1 --> OS["processOrder()"]
+        OS -->|"this.save() direct call"| SV["save() — bypasses proxy"]
+    end
+
+    subgraph fixed["FIXED — transaction applied"]
+        C2["Client"] --> P2["Proxy"]
+        P2 -->|"opens TX"| SV2["save() via proxy"]
+        SV2 --> TX2["commit / rollback"]
+    end
+```
 
 ```java
 @Service
@@ -2534,12 +2641,25 @@ public void create() throws IOException {
 
 The persistence context is a **first-level cache** of managed entities within a transaction:
 
+```mermaid
+stateDiagram-v2
+    [*] --> Transient: new Entity()
+    Transient --> Managed: persist() / find()
+    Managed --> Detached: clear() / close session
+    Managed --> Removed: remove()
+    Removed --> [*]: flush + commit
+    Detached --> Managed: merge()
 ```
-EntityManager / Hibernate Session
-  └── Persistence Context (L1 cache)
-        ├── Order#1 (managed)
-        ├── Order#2 (managed)
-        └── ...
+
+```mermaid
+flowchart TB
+    EM["EntityManager / Hibernate Session"]
+    PC["Persistence Context — L1 cache"]
+    O1["Order#1 — managed"]
+    O2["Order#2 — managed"]
+    EM --> PC
+    PC --> O1
+    PC --> O2
 ```
 
 | State | Description |
@@ -2595,12 +2715,25 @@ spring.jpa.open-in-view: false
 
 #### N+1 — SQL generated
 
+```mermaid
+sequenceDiagram
+    participant App
+    participant DB
+
+    App->>DB: SELECT * FROM orders (1 query)
+    DB-->>App: 100 orders
+    loop For each order
+        App->>DB: SELECT * FROM order_items WHERE order_id = ?
+        DB-->>App: items
+    end
+    Note over App,DB: Total = 1 + N queries (N+1 problem)
+```
+
 ```sql
 -- 1 query
 SELECT * FROM orders;
 
 -- N queries (one per order)
-SELECT * FROM order_items WHERE order_id = ?;
 SELECT * FROM order_items WHERE order_id = ?;
 ...
 ```
@@ -2627,13 +2760,15 @@ Optional<Order> findWithItems(@Param("id") Long id);
 
 #### Bootstrapping chain
 
-```
-@SpringBootApplication
-  └── @EnableAutoConfiguration
-        └── AutoConfigurationImportSelector
-              └── reads META-INF/spring/...AutoConfiguration.imports
-                    └── applies @Conditional* annotations
-                          └── registers beans if all conditions match
+```mermaid
+flowchart TD
+    A["@SpringBootApplication"] --> B["@EnableAutoConfiguration"]
+    B --> C["AutoConfigurationImportSelector"]
+    C --> D["Read META-INF/spring/...AutoConfiguration.imports"]
+    D --> E["Evaluate @Conditional* annotations"]
+    E --> F{"All conditions match?"}
+    F -->|Yes| G["Register auto-config beans"]
+    F -->|No| H["Skip configuration"]
 ```
 
 #### Key conditional annotations
@@ -2651,12 +2786,16 @@ Optional<Order> findWithItems(@Param("id") Long id);
 
 #### Example: DataSource auto-config
 
-```
-If HikariCP on classpath
-AND DataSource class present
-AND no user-defined DataSource @Bean
-AND spring.datasource.url set
-  → create HikariDataSource bean
+```mermaid
+flowchart TD
+    A["HikariCP on classpath?"] -->|Yes| B["DataSource class present?"]
+    A -->|No| X["Skip"]
+    B -->|Yes| C["No user DataSource @Bean?"]
+    B -->|No| X
+    C -->|Yes| D["spring.datasource.url set?"]
+    C -->|No| X
+    D -->|Yes| E["Create HikariDataSource bean"]
+    D -->|No| X
 ```
 
 #### Overriding auto-config
@@ -2716,13 +2855,17 @@ Binds `app.kafka.topic` from env vars, YAML, or K8s ConfigMap — type-safe and 
 
 Each partition is a directory on the broker:
 
-```
-/kafka-logs/order-events-0/
-  ├── 00000000000000000000.log      # segment file
-  ├── 00000000000000000000.index    # offset → file position
-  ├── 00000000000000000000.timeindex
-  ├── 00000000000000012345.log      # next segment
-  └── ...
+```mermaid
+flowchart LR
+    subgraph dir["/kafka-logs/order-events-0/"]
+        L0["000...000.log<br/>segment"]
+        I0["000...000.index<br/>offset → position"]
+        T0["000...000.timeindex"]
+        L1["000...12345.log<br/>next segment"]
+    end
+    L0 --- I0
+    L0 --- T0
+    L0 --> L1
 ```
 
 | File | Purpose |
@@ -2733,12 +2876,34 @@ Each partition is a directory on the broker:
 
 #### Write path
 
+```mermaid
+sequenceDiagram
+    participant P as Producer
+    participant L as Partition Leader
+    participant F as Followers (ISR)
+    participant D as Disk Segment
+
+    P->>L: send batch
+    L->>D: append to active segment
+    L->>F: replicate
+    F-->>L: ack
+    L-->>P: ack (per acks config)
+    Note over L,D: Roll new segment when segment.bytes or segment.ms hit
+```
+
 1. Producer sends batch to **partition leader**
 2. Leader appends to active segment (sequential write — fast on HDD/SSD)
 3. Followers replicate by fetching from leader (ISR)
 4. When segment hits `segment.bytes` or `segment.ms` → roll new segment
 
 #### Read path
+
+```mermaid
+flowchart LR
+    C["Consumer requests offset N"] --> B["Broker finds segment via .index"]
+    B --> S["Seek byte position in .log"]
+    S --> R["Read batch → return records"]
+```
 
 1. Consumer requests offset N
 2. Broker finds segment containing N via index
@@ -2769,10 +2934,23 @@ Kafka uses OS `sendfile` to transfer data from disk to network socket without co
 
 Redistribution of partition ownership among consumers in a group when group membership changes.
 
-```
-Before:  C1→[P0,P1]  C2→[P2,P3]
-C3 joins
-After:   C1→[P0]  C2→[P1,P2]  C3→[P3]
+```mermaid
+flowchart TB
+    subgraph before["Before — 2 consumers, 4 partitions"]
+        C1a["Consumer 1"] --> P0a["P0"]
+        C1a --> P1a["P1"]
+        C2a["Consumer 2"] --> P2a["P2"]
+        C2a --> P3a["P3"]
+    end
+
+    subgraph after["After — Consumer 3 joins"]
+        C1b["Consumer 1"] --> P0b["P0"]
+        C2b["Consumer 2"] --> P1b["P1"]
+        C2b --> P2b["P2"]
+        C3b["Consumer 3"] --> P3b["P3"]
+    end
+
+    before -->|"rebalance"| after
 ```
 
 #### Triggers
@@ -2786,6 +2964,18 @@ After:   C1→[P0]  C2→[P1,P2]  C3→[P3]
 | Subscription changed | New topic subscribed |
 
 #### Rebalance protocols
+
+```mermaid
+flowchart LR
+    subgraph eager["Eager (classic)"]
+        E1["Revoke ALL partitions"] --> E2["Stop processing"]
+        E2 --> E3["Reassign all"]
+    end
+    subgraph coop["Cooperative (incremental)"]
+        C1["Revoke only moving partitions"] --> C2["Keep stable assignments"]
+        C2 --> C3["Assign new partitions"]
+    end
+```
 
 | Protocol | Behavior | Downside |
 |----------|----------|----------|
@@ -2837,6 +3027,23 @@ group.instance.id=consumer-1  # static membership — skip rebalance on brief re
 
 #### The problem
 
+```mermaid
+flowchart TB
+    subgraph am["At-most-once — commit then process"]
+        AM1["Commit offset"] --> AM2["Process message"]
+        AM2 -.->|"crash here"| AML["Message LOST"]
+    end
+    subgraph al["At-least-once — process then commit"]
+        AL1["Process message"] --> AL2["Commit offset"]
+        AL1 -.->|"crash here"| ALD["Message DUPLICATE on retry"]
+    end
+    subgraph eo["Exactly-once — Kafka transaction"]
+        EO1["Begin transaction"] --> EO2["Process + produce + offset"]
+        EO2 --> EO3["Commit transaction"]
+        EO3 -.->|"atomic"| EOK["All or nothing"]
+    end
+```
+
 | Approach | Failure scenario | Result |
 |----------|------------------|--------|
 | Commit offset then process | Crash after commit | **Lost** message |
@@ -2844,10 +3051,11 @@ group.instance.id=consumer-1  # static membership — skip rebalance on brief re
 
 #### Kafka EOS building blocks
 
-```
-1. Idempotent Producer     → no duplicate writes from producer retries
-2. Transactions            → atomic write across multiple partitions
-3. Transactional Consumer  → read_committed isolation
+```mermaid
+flowchart LR
+    A["Idempotent Producer<br/>PID + sequence dedup"] --> D["Exactly-once writes"]
+    B["Transactional Producer<br/>begin / commit / abort"] --> D
+    C["Transactional Consumer<br/>read_committed isolation"] --> D
 ```
 
 #### Idempotent producer internals
@@ -2881,12 +3089,20 @@ Requires unique `transactional.id` per producer instance.
 
 #### consume-transform-produce (exactly-once)
 
-```
-Consumer (read_committed)
-  → process
-  → Producer (same transaction)
-  → send offsets to transaction
-  → commitTransaction()
+```mermaid
+sequenceDiagram
+    participant C as Consumer
+    participant App as Application
+    participant P as Transactional Producer
+    participant K as Kafka
+
+    C->>App: poll records (read_committed)
+    App->>P: beginTransaction()
+    App->>App: process + transform
+    App->>P: send output records
+    App->>P: send offsets to transaction
+    App->>P: commitTransaction()
+    P->>K: atomic commit
 ```
 
 All atomic: either all visible or none.
@@ -2916,7 +3132,16 @@ All atomic: either all visible or none.
 
 #### The dual-write problem
 
+```mermaid
+flowchart TB
+    S["@Transactional placeOrder()"]
+    S --> DB["orderRepo.save() — DB TX"]
+    S --> K["kafkaTemplate.send() — separate system"]
+    DB -.->|"DB ok, Kafka fails"| BAD1["Order saved, no event"]
+    K -.->|"Kafka ok, DB fails"| BAD2["Event sent, no order"]
 ```
+
+```java
 @Service
 @Transactional
 public void placeOrder(Order o) {
@@ -2932,6 +3157,18 @@ Failure modes:
 | Kafka ok, DB fails | Event published, no order — inconsistent |
 
 #### Outbox solution
+
+```mermaid
+flowchart TB
+    subgraph tx["Single DB transaction"]
+        O["INSERT INTO orders"]
+        OB["INSERT INTO outbox"]
+    end
+    O --> COMMIT["COMMIT"]
+    OB --> COMMIT
+    COMMIT --> Relay["Outbox Relay / Debezium CDC"]
+    Relay --> Kafka["Kafka topic"]
+```
 
 ```sql
 -- Same database transaction
@@ -2985,36 +3222,34 @@ CREATE TABLE outbox (
 
 #### Pair with inbox (idempotent consumer)
 
-```
-Consumer receives event
-  BEGIN TX;
-    IF EXISTS (SELECT 1 FROM inbox WHERE message_id = ?) → COMMIT (skip)
-    ELSE process business logic
-         INSERT INTO inbox (message_id, processed_at)
-  COMMIT;
+```mermaid
+flowchart TD
+    E["Event received"] --> TX["BEGIN TX"]
+    TX --> CHK{"message_id in inbox?"}
+    CHK -->|Yes| SKIP["Skip — already processed"]
+    CHK -->|No| PROC["Process business logic"]
+    PROC --> INS["INSERT INTO inbox"]
+    INS --> COMMIT["COMMIT"]
+    SKIP --> COMMIT
 ```
 
 Together: **at-least-once delivery + idempotent processing = effectively-once**.
 
-#### Whiteboard flow (interview gold)
+#### End-to-end flow (interview gold)
 
-```
-[REST API] → [Order Service]
-                  │
-                  ├─ BEGIN TX
-                  ├─ INSERT orders
-                  ├─ INSERT outbox
-                  └─ COMMIT TX
-                        │
-              [Outbox Relay / Debezium]
-                        │
-                        ▼
-                  [Kafka: order-events]
-                   /              \
-         [Inventory Svc]    [Payment Svc]
-              │                    │
-         inbox check           inbox check
-         process               process
+```mermaid
+flowchart TB
+    API["REST API"] --> OS["Order Service"]
+    OS --> TX["BEGIN TX"]
+    TX --> ORD["INSERT orders"]
+    TX --> OUT["INSERT outbox"]
+    TX --> CMT["COMMIT"]
+    CMT --> REL["Outbox Relay / Debezium"]
+    REL --> KFK["Kafka: order-events"]
+    KFK --> INV["Inventory Service"]
+    KFK --> PAY["Payment Service"]
+    INV --> IN1["inbox check → process"]
+    PAY --> IN2["inbox check → process"]
 ```
 
 **Key talking points:**
@@ -3031,13 +3266,15 @@ Together: **at-least-once delivery + idempotent processing = effectively-once**.
 
 ### Scenario 1: Place order API → downstream processing
 
-```
-Client → Spring REST Controller
-       → @Transactional OrderService (save DB)
-       → Outbox table (same TX)
-       → Debezium/Relay → Kafka "order-events"
-       → Inventory Service (@KafkaListener)
-       → Payment Service (@KafkaListener)
+```mermaid
+flowchart LR
+    Client --> REST["REST Controller"]
+    REST --> Svc["@Transactional OrderService"]
+    Svc --> DB[(Database + Outbox)]
+    DB --> Relay["Debezium / Relay"]
+    Relay --> Kafka["order-events topic"]
+    Kafka --> Inv["Inventory @KafkaListener"]
+    Kafka --> Pay["Payment @KafkaListener"]
 ```
 
 **Be ready to explain:** transaction boundaries, outbox, idempotent consumers, correlation IDs.
@@ -3184,4 +3421,4 @@ Kafka send is **not** part of DB transaction. Use outbox pattern.
 
 ---
 
-*Last updated: June 2025 — covers Java 17+, Spring Boot 3.x, Kafka 3.x/4.x (KRaft). Includes dedicated [Deep Dive](#deep-dive) section.*
+*Last updated: June 2025 — covers Java 17+, Spring Boot 3.x, Kafka 3.x/4.x (KRaft). Includes dedicated [Deep Dive](#deep-dive) section with Mermaid diagrams (render on GitHub).*
