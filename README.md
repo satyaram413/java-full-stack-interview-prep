@@ -1,6 +1,6 @@
-# Interview Prep: Java · Spring Boot · Apache Kafka
+# Java Full Stack Interview Prep
 
-A structured reference guide for backend interviews covering core Java, Spring Boot, and Apache Kafka — with definitions, internals, trade-offs, code examples, and system-design patterns.
+A structured reference guide for full-stack Java interviews covering core Java, Spring Boot, and Apache Kafka — with definitions, internals, trade-offs, code examples, and system-design patterns.
 
 ---
 
