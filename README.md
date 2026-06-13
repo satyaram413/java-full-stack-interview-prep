@@ -37,10 +37,25 @@ A structured reference guide for full-stack Java interviews covering core Java, 
    - [Kafka vs Alternatives](#kafka-vs-alternatives)
    - [Spring Kafka Integration](#spring-kafka-integration)
    - [System Design Patterns](#system-design-patterns)
-5. [Cross-Topic Integration](#cross-topic-integration)
-6. [Mock Interview Cheat Sheet](#mock-interview-cheat-sheet)
-7. [3-Day Study Plan](#3-day-study-plan)
-8. [Further Reading](#further-reading)
+5. [Deep Dive](#deep-dive)
+   - [Java Deep Dive](#java-deep-dive)
+     - [HashMap Internals](#dd-hashmap-internals)
+     - [JVM Memory & Garbage Collection](#dd-jvm-gc)
+     - [Concurrency & the Java Memory Model](#dd-concurrency-jmm)
+     - [Class Loading & Bytecode](#dd-class-loading)
+   - [Spring Boot Deep Dive](#spring-boot-deep-dive)
+     - [AOP Proxies & `@Transactional`](#dd-spring-proxy-transactional)
+     - [JPA Persistence Context & Session](#dd-jpa-persistence-context)
+     - [Auto-Configuration Conditions](#dd-auto-config-conditions)
+   - [Kafka Deep Dive](#kafka-deep-dive)
+     - [Log Segments & Storage](#dd-kafka-log-segments)
+     - [Consumer Rebalance Protocol](#dd-consumer-rebalance)
+     - [Exactly-Once Semantics (EOS)](#dd-kafka-eos)
+     - [Transactional Outbox Pattern](#dd-transactional-outbox)
+6. [Cross-Topic Integration](#cross-topic-integration)
+7. [Mock Interview Cheat Sheet](#mock-interview-cheat-sheet)
+8. [3-Day Study Plan](#3-day-study-plan)
+9. [Further Reading](#further-reading)
 
 ---
 
@@ -49,7 +64,7 @@ A structured reference guide for full-stack Java interviews covering core Java, 
 | Technique | How |
 |-----------|-----|
 | **30-second answer** | State definition → one trade-off → one real example |
-| **Deep dive** | Expand with internals when interviewer says "go deeper" |
+| **Deep dive** | Jump to [Deep Dive](#deep-dive) — internals, JVM, proxies, Kafka log, EOS, outbox |
 | **System design** | Always mention: ordering, idempotency, failure handling, observability |
 | **Stories** | Prepare 2 narratives: one debugging incident, one event-driven design |
 
@@ -273,6 +288,8 @@ Map (separate hierarchy)
 
 ### Q11. `HashMap` internals (deep dive)
 
+> **Full deep dive:** [HashMap Internals →](#dd-hashmap-internals)
+
 **Structure (Java 8+):**
 1. Array of buckets (capacity, power of 2)
 2. `hash(key)` → spread bits → `index = (n-1) & hash`
@@ -405,6 +422,8 @@ List<String> names = people.stream()
 ---
 
 ### Q18. Stream API (deep dive)
+
+> **Related:** [Concurrency & JMM →](#dd-concurrency-jmm)
 
 **Characteristics:**
 - **Declarative** pipeline
@@ -1145,6 +1164,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
 ### Q18. N+1 problem (deep dive)
 
+> **Full deep dive:** [JPA Persistence Context →](#dd-jpa-persistence-context)
+
 **Problem:** 1 query for N parent rows + N queries for children.
 
 ```java
@@ -1191,6 +1212,8 @@ Occurs when lazy association accessed **outside** an active persistence context 
 ## Transactions
 
 ### Q21. `@Transactional` deep dive
+
+> **Full deep dive:** [AOP Proxies & `@Transactional` →](#dd-spring-proxy-transactional)
 
 Spring uses **AOP proxy** around `@Transactional` beans.
 
@@ -2061,6 +2084,947 @@ Saga Orchestrator → commands → services → replies
 
 ---
 
+# Deep Dive
+
+> Use this section when the interviewer says *"go deeper"* or asks about **internals**. Each topic builds on the Q&A sections above with implementation detail, failure modes, and whiteboard-ready explanations.
+
+| Track | Topics | Typical trigger question |
+|-------|--------|--------------------------|
+| [Java](#java-deep-dive) | HashMap, JVM/GC, JMM, class loading | "How does HashMap work internally?" |
+| [Spring Boot](#spring-boot-deep-dive) | Proxies, JPA session, auto-config | "Why didn't `@Transactional` work?" |
+| [Kafka](#kafka-deep-dive) | Log segments, rebalance, EOS, outbox | "How does Kafka guarantee durability?" |
+
+---
+
+## Java Deep Dive
+
+<a id="dd-hashmap-internals"></a>
+
+### HashMap Internals
+
+> **Quick link from:** [Q11. HashMap internals](#q11-hashmap-internals-deep-dive)
+
+#### Data structure (Java 8+)
+
+```
+table[]  (Node<K,V>[] — power-of-2 capacity)
+  │
+  ├─ [0] → null
+  ├─ [1] → Node → Node → Node   (linked list, collision chain)
+  ├─ [2] → TreeNode (Red-Black Tree, when bucket ≥ 8 and table ≥ 64)
+  └─ ...
+```
+
+Each `Node` holds: `hash`, `key`, `value`, `next`.
+
+#### `put(key, value)` step-by-step
+
+1. Compute `hash = key.hashCode() ^ (hashCode >>> 16)` — spreads high bits to reduce collisions
+2. `index = (n - 1) & hash` — fast modulo via bitmask (capacity always power of 2)
+3. If bucket empty → insert new `Node`
+4. If first node has same `hash` and `equals(key)` → **replace value**
+5. Else walk list/tree → insert or treeify
+6. If `size > threshold` (`capacity × loadFactor`, default 0.75) → **resize** (2×) and rehash all entries
+
+#### Treeify / untreeify thresholds
+
+| Condition | Action |
+|-----------|--------|
+| Bucket list length ≥ **8** AND table length ≥ **64** | Convert list → Red-Black Tree |
+| Tree size ≤ **6** | Convert tree → list |
+| Table < 64 on treeify trigger | Resize first instead of treeify |
+
+**Why tree?** Worst-case O(n) bucket chains become O(log n) under hash collision attacks or bad `hashCode()`.
+
+#### Resize mechanics
+
+- New capacity = old × 2
+- Each entry reindexed: either stays at `i` or moves to `i + oldCap` (no full rehash — clever bit trick)
+- Expensive — avoid resizing by setting initial capacity: `new HashMap<>(expectedSize * 4 / 3 + 1)`
+
+#### `get(key)` step-by-step
+
+1. Same hash/index computation
+2. Check first node — match hash + equals → return value
+3. Else traverse list or search tree
+4. Not found → `null`
+
+#### Load factor trade-off
+
+| Load factor | Effect |
+|-------------|--------|
+| Lower (e.g. 0.5) | Fewer collisions, more memory, fewer resizes |
+| Higher (0.75 default) | More memory-efficient, more collisions |
+| 1.0 | Dense but slow lookups |
+
+#### Thread safety
+
+`HashMap` is **not** thread-safe. Concurrent `put` during iteration → `ConcurrentModificationException` (fail-fast).
+
+**Alternatives:**
+- `ConcurrentHashMap` — bucket-level locking / CAS
+- `Collections.synchronizedMap` — global lock per operation (avoid at scale)
+
+#### Interview follow-ups
+
+| Question | Answer |
+|----------|--------|
+| Why power-of-2 capacity? | Bitmask indexing `(n-1) & hash` is faster than `%` |
+| Can two keys collide? | Yes — equals/hashCode contract resolves |
+| Mutable key risk? | Hash changes → entry lost in wrong bucket |
+| `LinkedHashMap`? | HashMap + doubly-linked list for insertion/access order |
+| `TreeMap`? | Red-Black Tree on keys — O(log n), sorted |
+
+---
+
+<a id="dd-jvm-gc"></a>
+
+### JVM Memory & Garbage Collection
+
+> **Quick link from:** [JVM, Memory & Garbage Collection](#jvm-memory--garbage-collection)
+
+#### Runtime memory layout
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    JVM Process                          │
+├────────────────────┬────────────────────────────────────┤
+│  Per-thread Stacks  │  Heap (shared)                     │
+│  - frame per method │  ┌─ Young Generation ─────────────┐  │
+│  - local vars       │  │ Eden │ S0 │ S1  (Survivors)   │  │
+│  - operand stack    │  └────────────────────────────────┘  │
+│                     │  Old Generation (Tenured)          │
+├────────────────────┴────────────────────────────────────┤
+│  Metaspace (class metadata, static — Java 8+)           │
+│  Code Cache (JIT compiled native code)                  │
+│  Direct / Off-heap (ByteBuffer, Netty)                  │
+└─────────────────────────────────────────────────────────┘
+```
+
+| Where | What lives | GC? |
+|-------|------------|-----|
+| Stack | Primitives, object references (not objects themselves) | Automatic on frame pop |
+| Heap | All objects and arrays | GC manages |
+| Metaspace | Class definitions, method metadata | Class unloading (rare) |
+
+#### Object allocation path
+
+1. **Eden** — new objects allocated here (bump-the-pointer, very fast)
+2. **Minor GC** — live objects copied to Survivor (S0/S1); age counter incremented
+3. After ~15 cycles (default `MaxTenuringThreshold`) → promoted to **Old gen**
+4. **Major/Full GC** — Old gen cleanup; causes STW pauses
+
+#### GC roots
+
+Objects reachable from roots are **live**. Roots include:
+- Stack local variables in active threads
+- Static fields
+- JNI references
+- Synchronized monitor objects
+
+Everything else is garbage.
+
+#### Collector comparison (know for interviews)
+
+| Collector | Goal | Pause profile | Use case |
+|-----------|------|---------------|----------|
+| **G1** (default Java 9+) | Balanced throughput + latency | Target max pause (`-XX:MaxGCPauseMillis`) | General purpose |
+| **ZGC** | Ultra-low latency | Sub-ms pauses, scalable | Latency-sensitive services |
+| **Shenandoah** | Low pause concurrent | Concurrent compaction | Similar to ZGC |
+| **Parallel GC** | Throughput | Longer pauses OK | Batch processing |
+
+#### Tuning flags (production)
+
+```bash
+-Xms2g -Xmx2g                    # Fixed heap — avoid resize at runtime
+-XX:+UseG1GC
+-XX:MaxGCPauseMillis=200
+-XX:+HeapDumpOnOutOfMemoryError
+-XX:HeapDumpPath=/var/log/heap.hprof
+-Xlog:gc*:file=gc.log:time,uptime,level,tags
+```
+
+#### OOM types
+
+| Error | Cause |
+|-------|-------|
+| `Java heap space` | Too many live objects / leak |
+| `GC overhead limit exceeded` | GC spending > 98% time, recovering < 2% heap |
+| `Metaspace` | Too many classes loaded (dynamic proxies, class loaders) |
+| `Unable to create native thread` | Thread explosion |
+
+#### Memory leak patterns in Java
+
+```java
+// 1. Static cache never evicted
+private static final Map<String, byte[]> CACHE = new HashMap<>();
+
+// 2. Listener not removed
+eventBus.register(this); // forgot unregister on shutdown
+
+// 3. ThreadLocal in pool
+threadLocal.set(largeObject); // forgot remove() — survives across requests
+
+// 4. Unclosed resources
+Connection conn = dataSource.getConnection(); // no try-with-resources
+```
+
+**Debug:** heap dump → dominator tree → find largest retained set → inspect GC roots.
+
+---
+
+<a id="dd-concurrency-jmm"></a>
+
+### Concurrency & the Java Memory Model
+
+> **Quick link from:** [Concurrency & Multithreading](#concurrency--multithreading)
+
+#### Happens-before rules (JMM)
+
+If action A *happens-before* B, then A's effects are visible to B.
+
+| Rule | Example |
+|------|---------|
+| Program order | Statements in same thread |
+| Monitor lock | `unlock` on mutex happens-before next `lock` |
+| `volatile` write | Write happens-before subsequent read of same volatile |
+| Thread start | `thread.start()` happens-before any action in new thread |
+| Thread join | Actions in thread happen-before `join()` returns |
+
+#### `volatile` — what it does and doesn't do
+
+```java
+private volatile boolean running = true;
+
+// Thread A
+running = false;  // visible to Thread B immediately
+
+// Thread B
+while (running) { work(); }
+```
+
+| Guarantees | Does NOT guarantee |
+|------------|-------------------|
+| Visibility across threads | Atomicity of `count++` |
+| Ordering (no reorder across volatile access) | Mutual exclusion |
+
+For `i++` use `AtomicInteger` or `synchronized`.
+
+#### `synchronized` vs `ReentrantLock`
+
+```java
+// intrinsic lock
+synchronized (lock) {
+    // critical section
+}
+
+// explicit lock
+lock.lock();
+try {
+    // critical section
+} finally {
+    lock.unlock();  // MUST be in finally
+}
+```
+
+| Feature | synchronized | ReentrantLock |
+|---------|--------------|---------------|
+| Auto release | Yes | Manual `unlock()` |
+| tryLock / timeout | No | Yes |
+| Fair ordering | No | Optional |
+| Multiple conditions | No | `newCondition()` |
+
+#### Thread pool sizing (production heuristic)
+
+```
+CPU-bound:  pool size ≈ number of cores
+IO-bound:   pool size ≈ cores × (1 + wait_time / compute_time)
+```
+
+**Never** use `Executors.newCachedThreadPool()` unbounded in production — can create thousands of threads under load.
+
+**Prefer explicit `ThreadPoolExecutor`** with named threads, bounded queue, and rejection policy:
+
+| Rejection policy | Behavior |
+|------------------|----------|
+| `AbortPolicy` (default) | Throw `RejectedExecutionException` |
+| `CallerRunsPolicy` | Caller thread runs task — backpressure |
+| `DiscardOldestPolicy` | Drop oldest queued task |
+| `DiscardPolicy` | Silently drop |
+
+#### Deadlock detection
+
+```bash
+jstack <pid>   # or kill -3 <pid>
+# look for "Found one Java-level deadlock"
+```
+
+**Prevention:** global lock ordering, `tryLock` with timeout, reduce lock scope.
+
+#### `ConcurrentHashMap` vs `synchronized` HashMap
+
+```java
+// NOT atomic — race between get and put
+if (!map.containsKey(k)) map.put(k, v);
+
+// Atomic
+map.putIfAbsent(k, v);
+map.computeIfAbsent(k, key -> expensiveLoad(key));
+```
+
+---
+
+<a id="dd-class-loading"></a>
+
+### Class Loading & Bytecode
+
+#### Class loading phases
+
+```
+Loading → Linking (verify, prepare, resolve) → Initialization
+```
+
+| Phase | What happens |
+|-------|--------------|
+| **Loading** | Read `.class` bytes, create `Class<?>` object in metaspace |
+| **Linking — Verify** | Bytecode safety checks |
+| **Linking — Prepare** | Allocate static fields, set defaults |
+| **Linking — Resolve** | Symbolic refs → direct refs (can be lazy) |
+| **Initialization** | Run `<clinit>` — static blocks and field init |
+
+#### Classloader hierarchy (delegation model)
+
+```
+Bootstrap ClassLoader (JDK core — java.lang.*)
+        ↑
+Extension/Platform ClassLoader (JDK extensions)
+        ↑
+Application ClassLoader (classpath — your app)
+        ↑
+Custom ClassLoaders (plugins, containers)
+```
+
+**Delegation:** child asks parent first — prevents loading `java.lang.String` twice from different loaders.
+
+#### When is a class initialized?
+
+- First `new` instance
+- First static method/field access
+- `Class.forName("com.example.Foo")`
+- Subclass init triggers parent init first
+
+**Not initialized** by: referencing a static field that is a compile-time constant.
+
+#### Common interview scenarios
+
+| Scenario | Explanation |
+|----------|-------------|
+| Spring creates many proxies | CGLIB subclasses → many classes in metaspace |
+| `ClassNotFoundException` vs `NoClassDefFoundError` | Former: class not found at load; latter: found at compile, missing at runtime |
+| Hot deploy class leaks | Old class loaders retained by references → metaspace OOM |
+| `instanceof` with interfaces | Checks class hierarchy at runtime |
+
+#### JIT compilation (brief)
+
+1. Bytecode interpreted initially (C1 — fast compile)
+2. Hot methods compiled to native (C2 — aggressive optimizations)
+3. Inlining, escape analysis, lock elision on uncontended locks
+4. **Deoptimization** if assumptions break (e.g. monomorphic call becomes polymorphic)
+
+---
+
+## Spring Boot Deep Dive
+
+<a id="dd-spring-proxy-transactional"></a>
+
+### AOP Proxies & `@Transactional`
+
+> **Quick link from:** [Q21. `@Transactional` deep dive](#q21-transactional-deep-dive)
+
+#### How Spring applies `@Transactional`
+
+Spring does **not** modify your class bytecode at compile time (by default). At runtime it wraps your bean in a **proxy**:
+
+```
+Client → Proxy (opens TX, calls target, commits/rolls back) → Your @Service bean
+```
+
+#### JDK dynamic proxy vs CGLIB
+
+| | JDK Proxy | CGLIB Proxy |
+|---|-----------|-------------|
+| Requires | Interface | Concrete class (subclass) |
+| Mechanism | `java.lang.reflect.Proxy` | Bytecode subclass at runtime |
+| `final` methods | N/A | **Cannot** intercept `final` |
+| Default when | Bean implements interface | No interface |
+
+Spring Boot 2.x+ defaults to CGLIB for class-based proxies (`spring.aop.proxy-target-class=true`).
+
+#### What the proxy actually does
+
+```java
+// Conceptual — what Spring generates
+public Order placeOrder(CreateOrderRequest req) {
+    TransactionStatus status = txManager.getTransaction(def);
+    try {
+        Order result = target.placeOrder(req);  // your method
+        txManager.commit(status);
+        return result;
+    } catch (RuntimeException ex) {
+        txManager.rollback(status);
+        throw ex;
+    }
+}
+```
+
+#### Self-invocation trap (most common interview trap)
+
+```java
+@Service
+public class OrderService {
+    public void processOrder(Long id) {
+        this.save(id);  // DIRECT call — bypasses proxy — NO TRANSACTION
+    }
+
+    @Transactional
+    public void save(Long id) { ... }
+}
+```
+
+**Fixes:**
+1. Move `@Transactional` method to another `@Service` bean
+2. Inject self: `@Lazy @Autowired private OrderService self;` then `self.save(id)`
+3. Use `TransactionTemplate` programmatically
+4. Use `AspectJ` compile-time weaving (rare)
+
+#### Rollback rules (surprises)
+
+```java
+@Transactional  // rolls back on RuntimeException only
+public void create() throws IOException {
+    repo.save(entity);
+    throw new IOException("disk full");  // NOT rolled back by default!
+}
+
+@Transactional(rollbackFor = Exception.class)  // rolls back on all exceptions
+```
+
+#### Propagation edge cases
+
+| Case | Propagation | Result |
+|------|-------------|--------|
+| Outer + inner both REQUIRED | Same transaction | Inner failure rolls back all |
+| Outer REQUIRED + inner REQUIRES_NEW | Separate TX | Inner commits even if outer rolls back |
+| Outer REQUIRED + inner NOT_SUPPORTED | Inner suspends TX | Inner runs non-transactional |
+| Read in `REQUIRES_NEW` after outer rollback | Committed read | See uncommitted-isolation artifacts |
+
+#### `@Transactional` on private methods
+
+**Does not work** — proxy only intercepts public methods called through proxy.
+
+---
+
+<a id="dd-jpa-persistence-context"></a>
+
+### JPA Persistence Context & Session
+
+> **Quick link from:** [Q19. LazyInitializationException](#q19-lazyinitializationexception)
+
+#### Persistence context (session)
+
+The persistence context is a **first-level cache** of managed entities within a transaction:
+
+```
+EntityManager / Hibernate Session
+  └── Persistence Context (L1 cache)
+        ├── Order#1 (managed)
+        ├── Order#2 (managed)
+        └── ...
+```
+
+| State | Description |
+|-------|-------------|
+| **Transient** | New object, not associated with context |
+| **Managed** | Tracked — changes auto-flushed to DB on flush/commit |
+| **Detached** | Was managed, context closed — changes not tracked |
+| **Removed** | Scheduled for deletion |
+
+#### Entity lifecycle operations
+
+```java
+em.persist(order);   // transient → managed
+em.merge(order);     // detached → managed (copy)
+em.remove(order);    // managed → removed
+em.find(Order.class, id);  // managed from DB
+em.detach(order);    // managed → detached
+em.clear();          // detach all
+```
+
+#### Flush vs commit
+
+| Operation | Effect |
+|-----------|--------|
+| `flush()` | SQL sent to DB; **transaction still open** |
+| `commit()` | Flush + commit transaction |
+| Dirty checking | Hibernate compares managed entity to snapshot — auto UPDATE on flush |
+
+#### Lazy loading mechanics
+
+```java
+@ManyToOne(fetch = FetchType.LAZY)
+private Customer customer;  // Hibernate injects proxy subclass
+```
+
+When you call `order.getCustomer().getName()`:
+1. Proxy intercepts call
+2. If session open → SELECT from DB
+3. If session closed → **`LazyInitializationException`**
+
+#### Open Session In View (OSIV)
+
+Spring Boot enables `spring.jpa.open-in-view=true` by default:
+- Session stays open for entire HTTP request
+- Lazy loads work in controller — **masks** lazy loading bugs
+- Can hide N+1 problems and hold DB connections longer
+
+**Production recommendation:** disable OSIV, use DTOs + fetch joins in service layer.
+
+```yaml
+spring.jpa.open-in-view: false
+```
+
+#### N+1 — SQL generated
+
+```sql
+-- 1 query
+SELECT * FROM orders;
+
+-- N queries (one per order)
+SELECT * FROM order_items WHERE order_id = ?;
+SELECT * FROM order_items WHERE order_id = ?;
+...
+```
+
+**Fix with JOIN FETCH:**
+```java
+@Query("SELECT o FROM Order o JOIN FETCH o.items WHERE o.id = :id")
+Optional<Order> findWithItems(@Param("id") Long id);
+```
+
+#### Second-level cache (brief)
+
+- Shared across sessions (EhCache, Redis via Hibernate)
+- Only for rarely changing reference data
+- Invalidation complexity — know it exists, not always recommended
+
+---
+
+<a id="dd-auto-config-conditions"></a>
+
+### Auto-Configuration Conditions
+
+> **Quick link from:** [Q9. How does Spring Boot auto-configuration work?](#q9-how-does-spring-boot-auto-configuration-work)
+
+#### Bootstrapping chain
+
+```
+@SpringBootApplication
+  └── @EnableAutoConfiguration
+        └── AutoConfigurationImportSelector
+              └── reads META-INF/spring/...AutoConfiguration.imports
+                    └── applies @Conditional* annotations
+                          └── registers beans if all conditions match
+```
+
+#### Key conditional annotations
+
+| Annotation | Matches when |
+|------------|--------------|
+| `@ConditionalOnClass` | Class present on classpath |
+| `@ConditionalOnMissingClass` | Class absent |
+| `@ConditionalOnBean` | Bean of type already exists |
+| `@ConditionalOnMissingBean` | No bean of type (user can override) |
+| `@ConditionalOnProperty` | `application.properties` value matches |
+| `@ConditionalOnWebApplication` | Servlet or reactive web app |
+| `@ConditionalOnExpression` | SpEL evaluates true |
+| `@ConditionalOnResource` | Resource exists on classpath |
+
+#### Example: DataSource auto-config
+
+```
+If HikariCP on classpath
+AND DataSource class present
+AND no user-defined DataSource @Bean
+AND spring.datasource.url set
+  → create HikariDataSource bean
+```
+
+#### Overriding auto-config
+
+```java
+@Configuration
+public class DataSourceConfig {
+    @Bean
+    @Primary
+    public DataSource dataSource() {
+        return new HikariDataSource(); // replaces auto-configured bean
+    }
+}
+```
+
+Or exclude entirely:
+```java
+@SpringBootApplication(exclude = DataSourceAutoConfiguration.class)
+```
+
+#### Debugging auto-config report
+
+```bash
+java -jar app.jar --debug
+# or
+logging.level.org.springframework.boot.autoconfigure=DEBUG
+```
+
+Output shows:
+```
+Positive matches: DataSourceAutoConfiguration matched
+Negative matches: MongoAutoConfiguration did not match (MongoClient not on classpath)
+```
+
+#### `@ConfigurationProperties` binding
+
+```java
+@ConfigurationProperties(prefix = "app.kafka")
+public record KafkaProps(String topic, int retries) {}
+
+@EnableConfigurationProperties(KafkaProps.class)
+@SpringBootApplication
+public class App { }
+```
+
+Binds `app.kafka.topic` from env vars, YAML, or K8s ConfigMap — type-safe and validated at startup.
+
+---
+
+## Kafka Deep Dive
+
+<a id="dd-kafka-log-segments"></a>
+
+### Log Segments & Storage
+
+#### Partition = append-only log on disk
+
+Each partition is a directory on the broker:
+
+```
+/kafka-logs/order-events-0/
+  ├── 00000000000000000000.log      # segment file
+  ├── 00000000000000000000.index    # offset → file position
+  ├── 00000000000000000000.timeindex
+  ├── 00000000000000012345.log      # next segment
+  └── ...
+```
+
+| File | Purpose |
+|------|---------|
+| `.log` | Actual message bytes (batch format) |
+| `.index` | Maps offset → byte position in `.log` (sparse index) |
+| `.timeindex` | Maps timestamp → offset (for time-based retention) |
+
+#### Write path
+
+1. Producer sends batch to **partition leader**
+2. Leader appends to active segment (sequential write — fast on HDD/SSD)
+3. Followers replicate by fetching from leader (ISR)
+4. When segment hits `segment.bytes` or `segment.ms` → roll new segment
+
+#### Read path
+
+1. Consumer requests offset N
+2. Broker finds segment containing N via index
+3. Seeks to position, reads batch, returns records
+
+**Why sequential I/O matters:** Kafka optimized for disk throughput, not random access — can outperform random DB writes at scale.
+
+#### Zero-copy (`sendfile`)
+
+Kafka uses OS `sendfile` to transfer data from disk to network socket without copying through user space — key to high throughput.
+
+#### Retention on disk
+
+| Policy | Mechanism |
+|--------|-----------|
+| `delete` | Remove segments older than `retention.ms` or exceeding `retention.bytes` |
+| `compact` | Keep latest record per key; tombstone (null value) deletes key |
+
+---
+
+<a id="dd-consumer-rebalance"></a>
+
+### Consumer Rebalance Protocol
+
+> **Quick link from:** [Q14. Consumer rebalance](#q14-consumer-rebalance)
+
+#### What is rebalance?
+
+Redistribution of partition ownership among consumers in a group when group membership changes.
+
+```
+Before:  C1→[P0,P1]  C2→[P2,P3]
+C3 joins
+After:   C1→[P0]  C2→[P1,P2]  C3→[P3]
+```
+
+#### Triggers
+
+| Trigger | Config involved |
+|---------|-----------------|
+| Consumer joins/leaves | — |
+| Consumer crash | `session.timeout.ms`, `heartbeat.interval.ms` |
+| Processing too slow | `max.poll.interval.ms` exceeded |
+| Partition count changed | Admin operation |
+| Subscription changed | New topic subscribed |
+
+#### Rebalance protocols
+
+| Protocol | Behavior | Downside |
+|----------|----------|----------|
+| **Eager (classic)** | Revoke ALL partitions → reassign | Stop-the-world pause |
+| **Cooperative (incremental)** | Revoke only partitions to move | Minimal disruption |
+
+**Use:** `CooperativeStickyAssignor` (Kafka 2.4+)
+
+```properties
+partition.assignment.strategy=org.apache.kafka.clients.consumer.CooperativeStickyAssignor
+```
+
+#### Rebalance listener hooks
+
+```java
+consumer.subscribe(topics, new ConsumerRebalanceListener() {
+    @Override
+    public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+        consumer.commitSync();  // commit before losing partitions
+    }
+    @Override
+    public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+        // seek to committed offset or reset
+    }
+});
+```
+
+#### Rebalance storm symptoms
+
+- Constant partition revocations
+- Consumer lag spikes
+- Duplicate processing
+
+**Causes:** `session.timeout.ms` too low, long GC pauses, slow `poll()` loop.
+
+**Fix:** Increase timeouts, optimize processing, cooperative assignor, static membership:
+
+```properties
+group.instance.id=consumer-1  # static membership — skip rebalance on brief restart
+```
+
+---
+
+<a id="dd-kafka-eos"></a>
+
+### Exactly-Once Semantics (EOS)
+
+> **Quick link from:** [Q17–Q18. Delivery semantics](#q17-at-most-once-at-least-once-exactly-once)
+
+#### The problem
+
+| Approach | Failure scenario | Result |
+|----------|------------------|--------|
+| Commit offset then process | Crash after commit | **Lost** message |
+| Process then commit offset | Crash after process | **Duplicate** message |
+
+#### Kafka EOS building blocks
+
+```
+1. Idempotent Producer     → no duplicate writes from producer retries
+2. Transactions            → atomic write across multiple partitions
+3. Transactional Consumer  → read_committed isolation
+```
+
+#### Idempotent producer internals
+
+```
+Producer ID (PID) assigned by broker
+  + per-partition sequence number
+  → broker deduplicates retried batches
+```
+
+```properties
+enable.idempotence=true
+# implies: acks=all, retries=MAX, max.in.flight.requests.per.connection=5
+```
+
+#### Transactional producer
+
+```java
+producer.initTransactions();
+producer.beginTransaction();
+try {
+    producer.send(recordToOrders);
+    producer.send(recordToAudit);
+    producer.commitTransaction();
+} catch (Exception e) {
+    producer.abortTransaction();
+}
+```
+
+Requires unique `transactional.id` per producer instance.
+
+#### consume-transform-produce (exactly-once)
+
+```
+Consumer (read_committed)
+  → process
+  → Producer (same transaction)
+  → send offsets to transaction
+  → commitTransaction()
+```
+
+All atomic: either all visible or none.
+
+#### `read_committed` vs `read_uncommitted`
+
+| Isolation | Consumer sees |
+|-----------|---------------|
+| `read_uncommitted` | All messages (including uncommitted transactions) |
+| `read_committed` | Only committed transactions (default for EOS) |
+
+#### Practical production recommendation
+
+| Requirement | Approach |
+|-------------|----------|
+| Most services | **At-least-once** + idempotent consumer |
+| Billing / ledger | Kafka EOS or DB idempotency key |
+| Cross-system (DB + Kafka) | **Outbox pattern** — EOS alone doesn't span DB |
+
+---
+
+<a id="dd-transactional-outbox"></a>
+
+### Transactional Outbox Pattern
+
+> **Quick link from:** [Q32. Transactional Outbox pattern](#q32-transactional-outbox-pattern-critical-for-interviews)
+
+#### The dual-write problem
+
+```
+@Service
+@Transactional
+public void placeOrder(Order o) {
+    orderRepo.save(o);           // TX 1: DB
+    kafkaTemplate.send("events", o);  // NOT in same TX — can fail independently
+}
+```
+
+Failure modes:
+| Step fails | State |
+|------------|-------|
+| DB ok, Kafka fails | Order exists, no event — downstream never notified |
+| Kafka ok, DB fails | Event published, no order — inconsistent |
+
+#### Outbox solution
+
+```sql
+-- Same database transaction
+BEGIN;
+  INSERT INTO orders (...) VALUES (...);
+  INSERT INTO outbox (id, aggregate_type, aggregate_id, payload, created_at)
+    VALUES (uuid, 'Order', order_id, '{"status":"PLACED"}', now());
+COMMIT;
+```
+
+Separate **relay process** reads outbox → publishes to Kafka → marks row as sent (or deletes).
+
+#### Implementation options
+
+| Approach | How | Pros | Cons |
+|----------|-----|------|------|
+| **Polling publisher** | Scheduled job queries `WHERE sent=false` | Simple | Latency, polling load |
+| **Debezium CDC** | Reads DB WAL/binlog → Kafka | Near real-time, no poll | Ops complexity |
+| **Transactional messaging** | XA / chained TX | True atomicity | Slow, fragile — avoid |
+
+#### Polling publisher (Spring example)
+
+```java
+@Scheduled(fixedDelay = 1000)
+@Transactional
+public void publishOutbox() {
+    List<OutboxEvent> pending = outboxRepo.findTop100BySentFalseOrderByCreatedAt();
+    for (OutboxEvent event : pending) {
+        kafkaTemplate.send(event.getTopic(), event.getKey(), event.getPayload());
+        event.setSent(true);
+    }
+}
+```
+
+Use `SELECT ... FOR UPDATE SKIP LOCKED` for multi-instance relays.
+
+#### Outbox table schema
+
+```sql
+CREATE TABLE outbox (
+    id            UUID PRIMARY KEY,
+    aggregate_type VARCHAR(100) NOT NULL,
+    aggregate_id   VARCHAR(100) NOT NULL,
+    event_type     VARCHAR(100) NOT NULL,
+    payload        JSONB NOT NULL,
+    created_at     TIMESTAMP NOT NULL DEFAULT now(),
+    sent_at        TIMESTAMP,
+    INDEX idx_outbox_unsent (sent_at, created_at)
+);
+```
+
+#### Pair with inbox (idempotent consumer)
+
+```
+Consumer receives event
+  BEGIN TX;
+    IF EXISTS (SELECT 1 FROM inbox WHERE message_id = ?) → COMMIT (skip)
+    ELSE process business logic
+         INSERT INTO inbox (message_id, processed_at)
+  COMMIT;
+```
+
+Together: **at-least-once delivery + idempotent processing = effectively-once**.
+
+#### Whiteboard flow (interview gold)
+
+```
+[REST API] → [Order Service]
+                  │
+                  ├─ BEGIN TX
+                  ├─ INSERT orders
+                  ├─ INSERT outbox
+                  └─ COMMIT TX
+                        │
+              [Outbox Relay / Debezium]
+                        │
+                        ▼
+                  [Kafka: order-events]
+                   /              \
+         [Inventory Svc]    [Payment Svc]
+              │                    │
+         inbox check           inbox check
+         process               process
+```
+
+**Key talking points:**
+- Ordering: partition by `orderId`
+- Idempotency: inbox table + unique `message_id`
+- Failure: relay retries; consumers idempotent
+- Observability: correlation ID in outbox payload and Kafka headers
+
+---
+
 # Cross-Topic Integration
 
 ## Common combined interview scenarios
@@ -2196,6 +3160,7 @@ Kafka send is **not** part of DB transaction. Use outbox pattern.
 
 ## Interview day (30 min review)
 
+- [ ] [Deep Dive](#deep-dive) — HashMap, `@Transactional` proxy trap, Kafka outbox
 - [ ] SOLID + one design pattern example
 - [ ] `@Transactional` propagation and rollback rules
 - [ ] Kafka ordering + consumer group rules
@@ -2219,4 +3184,4 @@ Kafka send is **not** part of DB transaction. Use outbox pattern.
 
 ---
 
-*Last updated: June 2025 — covers Java 17+, Spring Boot 3.x, Kafka 3.x/4.x (KRaft).*
+*Last updated: June 2025 — covers Java 17+, Spring Boot 3.x, Kafka 3.x/4.x (KRaft). Includes dedicated [Deep Dive](#deep-dive) section.*
