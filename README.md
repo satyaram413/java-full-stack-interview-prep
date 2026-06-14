@@ -42,6 +42,8 @@ A structured reference guide for full-stack Java interviews covering core Java, 
      - [HashMap Internals](#dd-hashmap-internals)
      - [JVM Memory & Garbage Collection](#dd-jvm-gc)
      - [Concurrency & the Java Memory Model](#dd-concurrency-jmm)
+     - [Future, Callable & CompletableFuture](#dd-future-completable)
+     - [Virtual Threads (Java 21+)](#dd-virtual-threads)
      - [Class Loading & Bytecode](#dd-class-loading)
    - [Spring Boot Deep Dive](#spring-boot-deep-dive)
      - [AOP Proxies & `@Transactional`](#dd-spring-proxy-transactional)
@@ -64,7 +66,7 @@ A structured reference guide for full-stack Java interviews covering core Java, 
 | Technique | How |
 |-----------|-----|
 | **30-second answer** | State definition → one trade-off → one real example |
-| **Deep dive** | Jump to [Deep Dive](#deep-dive) — internals, JVM, proxies, Kafka log, EOS, outbox |
+| **Deep dive** | Jump to [Deep Dive](#deep-dive) — internals, JVM, Future, virtual threads, proxies, Kafka |
 | **System design** | Always mention: ordering, idempotency, failure handling, observability |
 | **Stories** | Prepare 2 narratives: one debugging incident, one event-driven design |
 
@@ -524,9 +526,12 @@ NEW → RUNNABLE ⇄ BLOCKED/WAITING/TIMED_WAITING → TERMINATED
 |----------|----------------|
 | Extend `Thread` | Avoid |
 | Implement `Runnable` | OK for simple cases |
-| `ExecutorService` | **Production standard** |
-| `Callable` + `Future` | When you need return value |
+| `ExecutorService` | **Production standard** (platform thread pools) |
+| `Callable` + `Future` | When you need return value from async work |
 | `CompletableFuture` | Async composition (Java 8+) |
+| **Virtual threads** | High concurrency IO-bound (Java 21+) — [deep dive →](#dd-virtual-threads) |
+
+> **Full deep dive:** [Future & CompletableFuture →](#dd-future-completable)
 
 ```java
 ExecutorService pool = Executors.newFixedThreadPool(10);
@@ -594,6 +599,8 @@ Prefer these over `get` + `put` for atomicity.
 
 ### Q27. `CompletableFuture` patterns
 
+> **Full deep dive:** [Future, Callable & CompletableFuture →](#dd-future-completable)
+
 ```java
 CompletableFuture<String> future = CompletableFuture
     .supplyAsync(() -> fetchUser())
@@ -604,6 +611,72 @@ CompletableFuture<String> future = CompletableFuture
 // Combine
 CompletableFuture.allOf(f1, f2, f3).join();
 ```
+
+---
+
+### Future, `Callable`, and `CompletableFuture`
+
+> **Full deep dive:** [Future, Callable & CompletableFuture →](#dd-future-completable)
+
+**What is `Future`?** A handle to a result that is computed **asynchronously** — usually on another thread in a pool.
+
+| Type | Returns value? | Throws checked ex? | Typical use |
+|------|----------------|-------------------|-------------|
+| `Runnable` | No | No | Fire-and-forget task |
+| `Callable<V>` | Yes (`V`) | Yes | Task with result |
+| `Future<V>` | Retrieved via `get()` | Wrapped in `ExecutionException` | Track async `Callable` |
+
+```java
+ExecutorService pool = Executors.newFixedThreadPool(4);
+
+Future<String> future = pool.submit(() -> {
+    return httpClient.get("/api/user");  // runs on worker thread
+});
+
+// main thread does other work...
+String result = future.get(5, TimeUnit.SECONDS);
+```
+
+**Key `Future` methods:** `get()`, `get(timeout)`, `isDone()`, `cancel(mayInterrupt)`, `isCancelled()`.
+
+**`execute()` vs `submit()`:**
+
+| Method | Input | Returns |
+|--------|-------|---------|
+| `execute(Runnable)` | Runnable | void — no `Future` |
+| `submit(Callable)` | Callable | `Future<T>` |
+| `submit(Runnable)` | Runnable | `Future<?>` |
+
+**Why `CompletableFuture`?** Plain `Future` only supports blocking `get()`. `CompletableFuture` adds chaining, combining, and callbacks.
+
+---
+
+### Virtual Threads (Java 21+)
+
+> **Full deep dive:** [Virtual Threads →](#dd-virtual-threads)
+
+**What are they?** Lightweight threads managed by the **JVM**, not 1:1 with OS threads (Project Loom). Ideal for **IO-bound** workloads (HTTP, DB, file waits).
+
+```java
+// Create virtual thread directly
+Thread.startVirtualThread(() -> handleRequest());
+
+// Or use executor (Spring Boot 3.2+)
+try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+    executor.submit(() -> fetchFromDb());
+}
+```
+
+| | Platform threads | Virtual threads |
+|---|------------------|-----------------|
+| Memory | ~1 MB stack each | ~few KB |
+| Max practical count | Hundreds–low thousands | Millions |
+| Best for | CPU-bound | IO-bound (waiting on network/DB) |
+| Pooling | Yes — reuse expensive OS threads | **Don't pool** — create per task |
+
+**Spring Boot 3.2+:** `spring.threads.virtual.enabled=true` — Tomcat/request handling on virtual threads.
+
+**Pitfall — pinning:** `synchronized` or native code inside virtual thread can **pin** it to a carrier (platform) thread, reducing scalability. Prefer `ReentrantLock` over `synchronized` in hot virtual-thread paths.
 
 ---
 
@@ -2092,7 +2165,7 @@ Saga Orchestrator → commands → services → replies
 
 | Track | Topics | Typical trigger question |
 |-------|--------|--------------------------|
-| [Java](#java-deep-dive) | HashMap, JVM/GC, JMM, class loading | "How does HashMap work internally?" |
+| [Java](#java-deep-dive) | HashMap, JVM/GC, JMM, Future, virtual threads, class loading | "How does HashMap work internally?" |
 | [Spring Boot](#spring-boot-deep-dive) | Proxies, JPA session, auto-config | "Why didn't `@Transactional` work?" |
 | [Kafka](#kafka-deep-dive) | Log segments, rebalance, EOS, outbox | "How does Kafka guarantee durability?" |
 
@@ -2437,6 +2510,300 @@ if (!map.containsKey(k)) map.put(k, v);
 map.putIfAbsent(k, v);
 map.computeIfAbsent(k, key -> expensiveLoad(key));
 ```
+
+---
+
+<a id="dd-future-completable"></a>
+
+### Future, Callable & CompletableFuture
+
+> **Quick link from:** [Future, Callable, and CompletableFuture](#future-callable-and-completablefuture)
+
+#### How `Future` relates to threads
+
+`Future` does **not** create threads. A **thread pool** runs the work; `Future` is how the caller **waits for or cancels** the result.
+
+```mermaid
+sequenceDiagram
+    participant Main as Main Thread
+    participant Pool as ExecutorService
+    participant Worker as Worker Thread
+
+    Main->>Pool: submit(Callable)
+    Pool->>Worker: run task on pool thread
+    Pool-->>Main: Future handle
+    Note over Main: continues other work
+    Main->>Pool: future.get()
+    Worker-->>Main: result (blocks until ready)
+```
+
+#### Runnable vs Callable vs Future
+
+```mermaid
+flowchart LR
+    R["Runnable<br/>run() — no return"] --> E["ExecutorService"]
+    C["Callable<br/>call() → V"] --> E
+    E --> F["Future — get() / cancel()"]
+```
+
+```java
+// Runnable — no result
+pool.execute(() -> log.info("done"));
+
+// Callable — Future with result
+Future<Integer> f = pool.submit(() -> 42);
+
+// Multiple tasks
+List<Future<String>> futures = new ArrayList<>();
+for (String url : urls) {
+    futures.add(pool.submit(() -> fetch(url)));
+}
+for (Future<String> f : futures) {
+    System.out.println(f.get());
+}
+```
+
+#### `Future` API — interview essentials
+
+| Method | Behavior |
+|--------|----------|
+| `get()` | Block until complete; throws `ExecutionException` if task failed |
+| `get(timeout, unit)` | Block with timeout → `TimeoutException` |
+| `isDone()` | Finished (normal, exception, or cancelled) |
+| `cancel(true)` | Attempt cancel; `true` = may **interrupt** worker thread |
+| `isCancelled()` | Cancelled before completion |
+
+**Exception handling:**
+
+```java
+try {
+    String data = future.get();
+} catch (ExecutionException e) {
+    Throwable cause = e.getCause();  // actual exception from Callable
+} catch (InterruptedException e) {
+    Thread.currentThread().interrupt();
+}
+```
+
+#### Limitations of plain `Future`
+
+- No callbacks — must block on `get()`
+- No easy chaining of dependent async steps
+- No combining multiple futures without manual `get()` loops
+- `submit()` overloads return raw `Future` — composition is awkward
+
+#### `CompletableFuture` — async pipelines
+
+```mermaid
+flowchart LR
+    A["supplyAsync<br/>fetch user"] --> B["thenApply<br/>enrich"]
+    B --> C["thenCompose<br/>fetch orders async"]
+    C --> D["join / get<br/>final result"]
+```
+
+| Method | Purpose |
+|--------|---------|
+| `supplyAsync(Supplier)` | Start async with return value |
+| `runAsync(Runnable)` | Start async, no return |
+| `thenApply(fn)` | Transform result (sync) |
+| `thenApplyAsync(fn)` | Transform on another thread |
+| `thenCompose(fn)` | Flat-map — fn returns another `CompletableFuture` |
+| `thenCombine(other, fn)` | Merge two futures |
+| `allOf(futures...)` | Wait for all |
+| `anyOf(futures...)` | First to complete wins |
+| `exceptionally(fn)` | Handle failure |
+| `handle(fn)` | Success or failure handler |
+
+```java
+CompletableFuture<OrderSummary> summary = CompletableFuture
+    .supplyAsync(() -> userService.getUser(id))
+    .thenCombine(
+        CompletableFuture.supplyAsync(() -> orderService.getOrders(id)),
+        (user, orders) -> new OrderSummary(user, orders)
+    );
+
+// Spring @Async often returns CompletableFuture
+@Async
+public CompletableFuture<String> sendEmail(String to) { ... }
+```
+
+#### Default executor for `CompletableFuture`
+
+- `supplyAsync()` / `runAsync()` with **no executor** → `ForkJoinPool.commonPool()`
+- Production: **always pass explicit executor** (your thread pool or virtual thread executor)
+
+```java
+ExecutorService ioPool = Executors.newVirtualThreadPerTaskExecutor();
+CompletableFuture.supplyAsync(() -> fetch(), ioPool);
+```
+
+#### `Future` vs `CompletableFuture` — interview summary
+
+| | `Future` | `CompletableFuture` |
+|---|----------|---------------------|
+| Since | Java 5 | Java 8 |
+| Chaining | Manual | `thenApply`, `thenCompose` |
+| Combine tasks | Manual loops | `allOf`, `anyOf`, `thenCombine` |
+| Callbacks | No | Yes |
+| Implements `Future` | Yes | Yes (`get()`, `cancel()`) |
+
+**One-liner:** `Future` is the result ticket from a thread-pool task; `CompletableFuture` is a composable, callback-friendly async pipeline — both are thread-related.
+
+---
+
+<a id="dd-virtual-threads"></a>
+
+### Virtual Threads (Java 21+)
+
+> **Quick link from:** [Virtual Threads (Java 21+)](#virtual-threads-java-21)
+
+#### Problem with platform threads
+
+Each **platform thread** = 1 OS thread ≈ **~1 MB stack** + kernel scheduling overhead.
+
+```
+10,000 concurrent HTTP requests
+  → 10,000 platform threads = heavy memory + context switching
+  → thread pool queue grows → latency spikes
+```
+
+Most request threads **block waiting** on DB/HTTP — you pay for a full OS thread while it waits.
+
+#### Virtual threads — what they are
+
+**Virtual threads** (Project Loom, finalized Java 21) are **JVM-managed** lightweight threads scheduled onto a small pool of **carrier** (platform) threads.
+
+```mermaid
+flowchart TB
+    subgraph app["Application — millions of virtual threads"]
+        V1["Virtual Thread 1"]
+        V2["Virtual Thread 2"]
+        V3["Virtual Thread 3"]
+        VN["... Virtual Thread N"]
+    end
+    subgraph carriers["Few carrier platform threads"]
+        C1["Carrier 1"]
+        C2["Carrier 2"]
+    end
+    V1 --> C1
+    V2 --> C1
+    V3 --> C2
+    VN --> C2
+```
+
+When a virtual thread blocks on IO, the JVM **unmounts** it from the carrier and runs another virtual thread — **no OS thread per request**.
+
+#### Creating virtual threads
+
+```java
+// 1. Direct
+Thread vt = Thread.ofVirtual().name("worker-", 0).start(() -> handle());
+
+// 2. Java 21 shorthand
+Thread.startVirtualThread(() -> handle());
+
+// 3. Executor — preferred for many tasks
+try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+    IntStream.range(0, 10_000).forEach(i ->
+        executor.submit(() -> processRequest(i))
+    );
+}
+```
+
+**Do NOT pool virtual threads** — they are cheap to create; pooling adds complexity with no benefit.
+
+#### Platform vs virtual — when to use which
+
+| Workload | Use |
+|----------|-----|
+| CPU-bound (crypto, compression, ML inference) | Platform threads / `ForkJoinPool` sized to cores |
+| IO-bound (REST, JDBC, HTTP client, Kafka poll) | Virtual threads |
+| Mixed | Virtual threads for request path; dedicated pool for CPU work |
+
+```java
+// CPU work — keep off virtual threads or use separate platform pool
+ExecutorService cpuPool = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+```
+
+#### Pinning — critical interview topic
+
+A virtual thread **pinned** to its carrier cannot unmount while blocked → defeats the purpose.
+
+**Causes of pinning:**
+1. `synchronized` block/method (JDK improves over time — check your JDK version)
+2. Native code / JNI
+3. Some legacy libraries holding monitors
+
+```mermaid
+flowchart LR
+    VT["Virtual thread blocks<br/>inside synchronized"] --> PIN["Pinned to carrier"]
+    PIN --> BAD["Carrier blocked —<br/>fewer available carriers"]
+```
+
+**Mitigation:** use `ReentrantLock` instead of `synchronized` in code running on virtual threads.
+
+```java
+// Prefer this on virtual-thread hot paths
+private final ReentrantLock lock = new ReentrantLock();
+lock.lock();
+try {
+    // critical section
+} finally {
+    lock.unlock();
+}
+```
+
+**Monitor with:** JVM flag `-Djdk.tracePinnedThreads=full` (or `short`) to log pinning.
+
+#### Spring Boot integration
+
+```yaml
+# application.yml — Spring Boot 3.2+
+spring:
+  threads:
+    virtual:
+      enabled: true
+```
+
+- Tomcat / Jetty handle each request on a virtual thread
+- `@Async` can use virtual thread executor
+- JDBC drivers must be **non-blocking or pin-aware** — most blocking JDBC works but pins during native socket wait (still often OK at scale; test your stack)
+
+#### Structured concurrency (Java 21+ preview/incubator)
+
+Group related virtual threads with clear lifetime — if parent fails, children cancel:
+
+```java
+try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
+    Subtask<String> user = scope.fork(() -> fetchUser(id));
+    Subtask<List<Order>> orders = scope.fork(() -> fetchOrders(id));
+    scope.join();
+    scope.throwIfFailed();
+    return combine(user.get(), orders.get());
+}
+```
+
+#### Virtual threads vs reactive (WebFlux)
+
+| | Virtual threads | WebFlux (reactive) |
+|---|-----------------|-------------------|
+| Style | Imperative (normal Java code) | Functional chains (`Mono`/`Flux`) |
+| Debugging | Easier stack traces | Harder — async stacks |
+| Learning curve | Low | High |
+| JDBC | Works (blocking) | Needs reactive drivers |
+
+**Trend:** Many teams choose virtual threads over reactive for simpler IO-bound services.
+
+#### Interview one-liners
+
+| Question | Answer |
+|----------|--------|
+| What is a virtual thread? | JVM-managed lightweight thread, not 1:1 with OS thread |
+| When to use? | Many concurrent IO-bound tasks |
+| Pool virtual threads? | No — create per task |
+| vs `CompletableFuture`? | Virtual threads = thread per task, blocking style; CF = callback composition on pools |
+| Pinning? | `synchronized`/native blocks carrier — prefer `ReentrantLock` |
+| Java version? | Final in **Java 21** (preview in 19–20) |
 
 ---
 
@@ -3342,6 +3709,9 @@ Kafka send is **not** part of DB transaction. Use outbox pattern.
 | N+1 fix? | JOIN FETCH / `@EntityGraph` |
 | Dual write problem? | Transactional outbox |
 | Self-invocation + `@Transactional`? | Proxy bypassed — extract bean |
+| `Future` vs `CompletableFuture`? | Future = blocking result ticket; CF = composable async pipeline |
+| Virtual threads vs platform threads? | Virtual = cheap IO-bound (Java 21+); platform = CPU-bound / legacy |
+| Pool virtual threads? | No — create per task |
 
 ---
 
@@ -3353,6 +3723,7 @@ Kafka send is **not** part of DB transaction. Use outbox pattern.
 | JSON vs Avro | Easy dev | Production schema evolution |
 | Lazy vs Eager JPA | Performance default | Eager only when needed |
 | Auto vs manual offset commit | Simple | Safer processing guarantees |
+| Platform threads vs virtual threads | Fixed pool, CPU work | Millions of IO-bound tasks (Java 21+) |
 | Monolith vs microservices | Faster iteration | Independent scale/deploy |
 
 ---
@@ -3364,7 +3735,7 @@ Kafka send is **not** part of DB transaction. Use outbox pattern.
 | Block | Topics | Practice |
 |-------|--------|----------|
 | Morning | OOP, equals/hashCode, String, collections | Explain HashMap put flow on whiteboard |
-| Afternoon | Concurrency: synchronized, volatile, thread pools | Design thread-safe cache |
+| Afternoon | Concurrency: synchronized, volatile, Future, virtual threads | Explain Future vs thread pool |
 | Evening | JVM memory, GC, streams, Optional | Review 5 common pitfalls |
 
 **Self-test:** Explain pass-by-value with a `List` example. Draw HashMap bucket collision resolution.
@@ -3397,7 +3768,7 @@ Kafka send is **not** part of DB transaction. Use outbox pattern.
 
 ## Interview day (30 min review)
 
-- [ ] [Deep Dive](#deep-dive) — HashMap, `@Transactional` proxy trap, Kafka outbox
+- [ ] [Deep Dive](#deep-dive) — HashMap, `@Transactional` proxy trap, Future, virtual threads, Kafka outbox
 - [ ] SOLID + one design pattern example
 - [ ] `@Transactional` propagation and rollback rules
 - [ ] Kafka ordering + consumer group rules
@@ -3421,4 +3792,4 @@ Kafka send is **not** part of DB transaction. Use outbox pattern.
 
 ---
 
-*Last updated: June 2025 — covers Java 17+, Spring Boot 3.x, Kafka 3.x/4.x (KRaft). Includes dedicated [Deep Dive](#deep-dive) section with Mermaid diagrams (render on GitHub).*
+*Last updated: June 2025 — covers Java 21+ (virtual threads), Spring Boot 3.x, Kafka 3.x/4.x (KRaft). Includes [Deep Dive](#deep-dive) with Mermaid diagrams.*
