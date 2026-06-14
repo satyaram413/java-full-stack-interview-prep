@@ -301,27 +301,141 @@ Using **mutable objects as `HashMap` keys** — if fields used in `hashCode` cha
 
 ---
 
-### Q4. Why is `String` immutable?
+### Q4. String literals, string pool & why `String` is immutable
 
-1. **String pool** — literals can be interned and reused safely
-2. **Thread safety** — no synchronization needed
-3. **Security** — credentials/URLs can't be modified after passing
-4. **Hash stability** — `hashCode()` cached; safe as `HashMap` key
+#### What is a string literal?
+
+A **string literal** is text written **directly in your source code** between double quotes:
 
 ```java
-// BAD — creates N objects in loop
+String name = "Alice";   // "Alice" is the string literal
+String empty = "";       // empty string literal
+```
+
+The compiler treats it as a `String` object. You didn't call `new` — the literal is still a real `String` on the heap (usually from the **string pool**).
+
+**Not literals** — these create strings in other ways:
+
+```java
+String a = new String("Alice");  // explicit new — usually avoid
+String b = scanner.nextLine();  // from user input — not known at compile time
+String c = "Hel" + "lo";        // compile-time constant — often folded into one literal
+```
+
+---
+
+#### The famous interview question: `==` vs `.equals()` for strings
+
+```java
+String a = "hello";
+String b = "hello";
+String c = new String("hello");
+
+a == b;         // true  — same object in string pool
+a.equals(b);    // true  — same characters
+a == c;         // false — c is a different object on the heap
+a.equals(c);    // true  — same characters
+```
+
+| | Meaning |
+|---|---------|
+| `a == b` true | Both point to the **same** pooled object |
+| `a.equals(c)` true | Same **text**, different objects |
+| **Rule in real code** | Always use `.equals()` to compare string **content** |
+
+**Why is `a == b` true?** Both literals `"hello"` are stored once in the **string pool** (below). `a` and `b` reference that single copy.
+
+**Why is `a == c` false?** `new String("hello")` **forces a new object** on the heap outside the pool (unless you `intern()` it).
+
+---
+
+#### String pool (intern pool) — plain English
+
+A special area in heap memory where Java keeps **one copy** of each distinct literal string.
+
+```mermaid
+flowchart LR
+    CODE["String a = \"hello\"<br/>String b = \"hello\""]
+    POOL["String Pool<br/>one \"hello\" object"]
+    CODE --> POOL
+    a["variable a"] --> POOL
+    b["variable b"] --> POOL
+```
+
+1. First time `"hello"` appears → JVM creates it and puts it in the pool  
+2. Next `"hello"` literal in code → reuses the same object  
+3. Saves memory; makes literal comparison fast  
+
+**`intern()`** — ask JVM to put a heap string into the pool:
+
+```java
+String c = new String("hello");
+String d = c.intern();   // d points to pooled "hello"
+d == a;                  // true — now same pool object as a
+```
+
+Use `intern()` rarely — only when you have many duplicate strings and measured memory pressure. Wrong use can hurt performance (pool is a global hashtable).
+
+---
+
+#### Compile-time constant folding
+
+```java
+String s = "hel" + "lo";   // compiler sees "hello" — one literal, same as String s = "hello";
+final String X = "hi";
+String y = X + " there";   // if X is final constant, may fold at compile time
+```
+
+```java
+String part = getPart();   // runtime value
+String s = part + "lo";    // NOT folded — new StringBuilder work at runtime
+```
+
+---
+
+#### Why is `String` immutable?
+
+| Reason | What it means |
+|--------|----------------|
+| **String pool** | Safe to share one `"hello"` object everywhere — nobody can change it |
+| **Thread safety** | Multiple threads can read the same string with no locks |
+| **Security** | Password / file path string can't be modified after you pass it along |
+| **HashMap keys** | `hashCode` never changes — safe as map key |
+| **`String` is `final`** | Nobody can subclass and break immutability |
+
+```java
+String s = "hello";
+s.toUpperCase();   // returns NEW string "HELLO" — s is still "hello"
+```
+
+---
+
+#### Building strings in loops — don't use `+`
+
+```java
+// BAD — creates N temporary String objects in loop
 String s = "";
 for (int i = 0; i < 1000; i++) s += i;
 
-// GOOD
+// GOOD — one StringBuilder, one final String
 StringBuilder sb = new StringBuilder();
 for (int i = 0; i < 1000; i++) sb.append(i);
+String result = sb.toString();
 ```
 
 **`String` vs `StringBuilder` vs `StringBuffer`:**
-- `String` — immutable
-- `StringBuilder` — mutable, not thread-safe (preferred)
-- `StringBuffer` — mutable, synchronized (legacy)
+
+| Class | Mutable? | Thread-safe? | Use |
+|-------|----------|--------------|-----|
+| `String` | No | Yes (immutable) | Values that don't change |
+| `StringBuilder` | Yes | No | **Default** for building strings |
+| `StringBuffer` | Yes | Yes (synchronized) | Legacy — avoid unless required |
+
+---
+
+#### Interview answer (say this out loud)
+
+> "A string literal is text in double quotes in source code, like `"hello"`. Java stores literals in a string pool so identical literals share one object — that's why `==` can be true for two `"hello"` variables but you should still use `equals` for content comparison. `new String("hello")` creates a separate heap object. Strings are immutable so they can be pooled safely, used as HashMap keys, and shared across threads."
 
 ---
 
