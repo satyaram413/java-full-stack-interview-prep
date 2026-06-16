@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Resume Interview Q&A</title>
+<style>
+@page { size: A4; margin: 1.5cm; }
+body { font-family: Helvetica, Arial, sans-serif; font-size: 10pt; line-height: 1.45; color: #222; }
+h1 { font-size: 18pt; border-bottom: 2px solid #333; padding-bottom: 6px; margin-top: 0; }
+h2 { font-size: 13pt; color: #1a1a1a; margin-top: 18px; page-break-after: avoid; }
+h3 { font-size: 11pt; color: #333; margin-top: 14px; page-break-after: avoid; }
+p { margin: 6px 0; }
+ul, ol { margin: 6px 0 10px 18px; }
+li { margin-bottom: 3px; }
+code { font-family: Courier, monospace; font-size: 9pt; background: #f4f4f4; padding: 1px 4px; }
+pre { background: #f4f4f4; padding: 8px; font-size: 8.5pt; overflow-wrap: break-word; white-space: pre-wrap; }
+table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 9pt; }
+th, td { border: 1px solid #ccc; padding: 5px 8px; text-align: left; vertical-align: top; }
+th { background: #eee; }
+hr { border: none; border-top: 1px solid #ddd; margin: 16px 0; }
+blockquote { border-left: 3px solid #999; margin: 8px 0; padding-left: 10px; color: #444; }
+strong { color: #111; }
+a { color: #0645ad; text-decoration: none; }
+</style></head><body><h1>Interview Q&amp;A — Maka Surya Satya Sai Sitaram</h1>
+<p><strong>Role target:</strong> AI Engineer | Full Stack | MLOps &amp; Spring Boot<br />
+<strong>Based on resume:</strong> Maka_Sitaram_AI_Engineer_Resume.pdf</p>
+<blockquote>
+<p><strong>How to use:</strong> Read the <strong>short answer</strong> first (30 seconds). Expand with <strong>detailed answer</strong> when interviewer probes. Use <strong>your numbers</strong> (5%+ accuracy, 20% satisfaction, 89% model accuracy, etc.) — they matter.</p>
+</blockquote>
+<hr />
+<h2>Table of Contents</h2>
+<ol>
+<li><a href="#1-opening--general">Opening &amp; General</a></li>
+<li><a href="#2-dos--llm--vllm">DOS — LLM &amp; vLLM</a></li>
+<li><a href="#3-dos--rag-agents-dify-langchain-mcp">DOS — RAG, Agents, Dify, LangChain, MCP</a></li>
+<li><a href="#4-dos--embedding-fine-tuning">DOS — Embedding Fine-Tuning</a></li>
+<li><a href="#5-dos--sagemaker-mlops--full-stack-ai">DOS — SageMaker, MLOps &amp; Full-Stack AI</a></li>
+<li><a href="#6-dos--aws-mwaa--web-scraping-platform">DOS — AWS MWAA &amp; Web Scraping Platform</a></li>
+<li><a href="#7-govtech--camunda--offboarding">GovTech — Camunda &amp; Offboarding</a></li>
+<li><a href="#8-govtech--spring-boot-kotlin--integrations">GovTech — Spring Boot, Kotlin &amp; Integrations</a></li>
+<li><a href="#9-earlier-roles--fedex--hitachi">Earlier Roles — FedEx &amp; Hitachi</a></li>
+<li><a href="#10-key-projects--msc-thesis">Key Projects &amp; MSc Thesis</a></li>
+<li><a href="#11-behavioral--leadership">Behavioral &amp; Leadership</a></li>
+<li><a href="#12-certifications--skills-validation">Certifications &amp; Skills Validation</a></li>
+</ol>
+<hr />
+<h1>1. Opening &amp; General</h1>
+<h3>Q: Walk me through your resume / Tell me about yourself.</h3>
+<p><strong>Short answer (60 sec):</strong><br />
+I'm an AI Engineer with 7+ years of software engineering and an MSc in AI/ML. At Singapore's Department of Statistics, I deploy open-source LLMs on vLLM in secure GCC+ environments, build production agents with Dify and LangChain, and fine-tune embedding models for SSIC/SSOC classification — improving accuracy by 5%+ over baseline. Before that at GovTech, I sole-owned the Offboarding module using Camunda 8, Spring Boot, Kotlin, and React. I bridge full-stack engineering, workflow automation, and production ML/MLOps.</p>
+<p><strong>Detailed points to hit:</strong><br />
+- 7+ years: Hitachi (Camunda/Kafka) → Accolite/FedEx (Java/Angular) → Cognizant/GovTech (Camunda 8, Kotlin) → Cognizant/DOS (LLM, RAG, embeddings, SageMaker)<br />
+- MSc thesis: medical imaging CNNs, BlurPool vs MaxPool<br />
+- Strength: production AI in <strong>government/secure</strong> environments + strong <strong>Java/Spring</strong> foundation</p>
+<hr />
+<h3>Q: Why are you looking for a new role / Why leave DOS?</h3>
+<p><strong>Short answer:</strong><br />
+I've built strong production AI and MLOps experience at DOS and want to apply it at larger scale — either deeper AI product work or a role that combines LLM systems with platform engineering. I'm proud of what we shipped (vLLM serving, embedding fine-tuning, agent frameworks) and I'm ready for the next challenge.</p>
+<p><em>(Adjust honestly to your real situation — never badmouth employer.)</em></p>
+<hr />
+<h3>Q: What's your strongest technical area?</h3>
+<p><strong>Short answer:</strong><br />
+Production LLM systems end-to-end: inference (vLLM), RAG/agents (Dify, LangChain, MCP), embedding fine-tuning (BGE, QLoRA, Ray), plus the full-stack and MLOps to deploy them safely in regulated environments. I'm equally comfortable in Spring Boot/Kotlin when the problem needs robust backend services.</p>
+<hr />
+<h3>Q: AI Engineer vs Software Engineer — how do you see yourself?</h3>
+<p><strong>Short answer:</strong><br />
+I'm a software engineer who specializes in AI. I don't just train models — I deploy them: APIs, CI/CD, security (GCC+, SSO), evaluation benchmarks, and integration with business workflows (Camunda, FastAPI, React). That combination is what DOS and GovTech needed.</p>
+<hr />
+<h1>2. DOS — LLM &amp; vLLM</h1>
+<h3>Q: What did you do with vLLM at DOS?</h3>
+<p><strong>Short answer:</strong><br />
+I deployed open-source LLMs on the vLLM inference engine in a private GCC+ government cloud. I configured GPU allocation, PagedAttention, continuous batching, and exposed OpenAI-compatible REST endpoints so downstream apps could call models without vendor lock-in.</p>
+<p><strong>Follow-up — What is vLLM?</strong><br />
+vLLM is a high-throughput LLM <strong>inference</strong> serving framework. It optimizes GPU memory and batching so you can serve large models to many concurrent users with low latency.</p>
+<p><strong>Follow-up — What is PagedAttention?</strong><br />
+A memory management technique inspired by OS virtual memory. KV cache is stored in non-contiguous "pages" instead of one big contiguous block — reduces memory waste and lets you batch more requests on the same GPU.</p>
+<p><strong>Follow-up — What is continuous batching?</strong><br />
+Traditional batching waits until all sequences in a batch finish. Continuous batching adds new requests to the batch as soon as a sequence completes — higher GPU utilization and better throughput.</p>
+<hr />
+<h3>Q: Why open-source LLMs instead of only commercial APIs?</h3>
+<p><strong>Short answer:</strong><br />
+Government GCC+ environment: data residency, security, cost at scale, and control over model versions. Open-source models on private vLLM give us OpenAI-compatible APIs without sending sensitive statistical data to external providers.</p>
+<hr />
+<h3>Q: How did you expose models to applications?</h3>
+<p><strong>Short answer:</strong><br />
+OpenAI-compatible REST endpoints — apps can use standard client libraries with a custom base URL. This lowered integration effort for internal teams building RAG and agent workflows.</p>
+<hr />
+<h3>Q: What challenges did you face deploying LLMs in GCC+?</h3>
+<p><strong>Short answer (examples — use what actually happened):</strong><br />
+- GPU capacity planning and allocation in restricted cloud<br />
+- Network/security zones (VPC, PSN subnets)<br />
+- Model artifact storage and versioning in secure environments<br />
+- Monitoring latency, throughput, and GPU memory under production load<br />
+- Coordinating with security around WOG AD and Cognito/SSO</p>
+<hr />
+<h3>Q: How do you monitor LLM serving in production?</h3>
+<p><strong>Short answer:</strong><br />
+Track request latency (p50/p95), tokens/sec, GPU utilization, queue depth, error rates, and model version. Log prompts/responses carefully with PII redaction in government context. Alert on saturation or elevated latency.</p>
+<hr />
+<h1>3. DOS — RAG, Agents, Dify, LangChain, MCP</h1>
+<h3>Q: Explain RAG and how you used it.</h3>
+<p><strong>Short answer:</strong><br />
+<strong>RAG (Retrieval-Augmented Generation)</strong> = retrieve relevant documents first, then pass them to the LLM as context so answers are grounded in your data, not just model memory.</p>
+<p><strong>Typical pipeline:</strong><br />
+1. User query → embed query<br />
+2. Vector search (OpenSearch / similar) over domain docs<br />
+3. Top-k chunks + query → LLM → answer<br />
+4. Optional: cite sources, guardrails  </p>
+<p>At DOS: RAG for statistical/domain knowledge — SSIC/SSOC docs, internal guides, agent knowledge bases in Dify.</p>
+<hr />
+<h3>Q: What is Dify and how did you use it?</h3>
+<p><strong>Short answer:</strong><br />
+Dify is an open-source <strong>LLM application platform</strong> — visual workflows for agents, knowledge bases (RAG), tool calling, and prompt management. I built production agents on Dify and co-led the DOS Tech Drive teaching teams to build agents with RAG, E2B sandbox, and tool routing.</p>
+<p><strong>Follow-up — Dify vs LangChain?</strong></p>
+<table>
+<thead>
+<tr>
+<th>Dify</th>
+<th>LangChain</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Low-code UI, faster for teams</td>
+<td>Code-first, maximum flexibility</td>
+</tr>
+<tr>
+<td>Built-in knowledge base, ops UI</td>
+<td>Compose chains/agents in Python</td>
+</tr>
+<tr>
+<td>Good for product/analyst collaboration</td>
+<td>Good for custom engineering</td>
+</tr>
+</tbody>
+</table>
+<p>I used <strong>both</strong>: Dify for rapid agent delivery; LangChain where we needed custom code.</p>
+<hr />
+<h3>Q: What is MCP (Model Context Protocol)?</h3>
+<p><strong>Short answer:</strong><br />
+MCP is a standard for connecting LLMs/agents to <strong>tools and data sources</strong> in an interoperable way — like USB-C for AI integrations. I exposed agent capabilities through MCP so different clients and services could use the same tools consistently.</p>
+<p><strong>Interview line:</strong><br />
+Instead of every agent having custom tool glue code, MCP defines how tools, resources, and prompts are discovered and invoked.</p>
+<hr />
+<h3>Q: What tools did your Dify agents use? (Tech Drive)</h3>
+<p><strong>Short answer:</strong><br />
+- <strong>Knowledge Base RAG</strong> — internal documents<br />
+- <strong>E2B sandbox</strong> — safe Python code execution<br />
+- <strong>Firecrawl</strong> — web research<br />
+- <strong>Master agent / tool routing</strong> — orchestrate which tool handles which sub-task  </p>
+<hr />
+<h3>Q: How do you reduce hallucinations in RAG?</h3>
+<p><strong>Short answer:</strong><br />
+1. Retrieve better chunks (fine-tuned embeddings — my SSIC/SSOC work)<br />
+2. Strong system prompts: "answer only from context"<br />
+3. Low temperature for factual tasks<br />
+4. Citation requirements<br />
+5. Evaluation benchmarks on domain Q&amp;A<br />
+6. Re-ranking retrieved results  </p>
+<hr />
+<h3>Q: What is an AI agent vs a chatbot?</h3>
+<p><strong>Short answer:</strong><br />
+A <strong>chatbot</strong> mostly answers from one LLM call (maybe RAG). An <strong>agent</strong> plans steps, calls <strong>tools</strong> (APIs, DB, code sandbox, search), observes results, and loops until the task is done. My Dify/LangChain/MCP work was agent-style: tool routing, RAG, sandbox execution.</p>
+<hr />
+<h1>4. DOS — Embedding Fine-Tuning</h1>
+<h3>Q: Why did you fine-tune embeddings at DOS?</h3>
+<p><strong>Short answer:</strong><br />
+Generic embeddings (e.g. off-the-shelf BGE) don't understand <strong>Singapore domain language</strong> — SSIC (industry codes) and SSOC (occupation codes). Fine-tuning on domain pairs improved semantic matching for retrieval and classification by <strong>5%+ over baseline</strong> in our benchmarks.</p>
+<hr />
+<h3>Q: What models did you fine-tune?</h3>
+<p><strong>Short answer:</strong><br />
+<strong>BGE</strong> and <strong>Gemma</strong> embedding models using Hugging Face Sentence Transformers, PyTorch, QLoRA for parameter-efficient training, and <strong>Ray</strong> for distributed fine-tuning.</p>
+<hr />
+<h3>Q: Explain MNRL, Triplet Loss, and Sequence Classifier objectives.</h3>
+<p><strong>MNRL (Multiple Negatives Ranking Loss):</strong><br />
+Uses in-batch negatives — one positive pair (query, relevant doc) and other batch items act as negatives. Efficient for retrieval training at scale.</p>
+<p><strong>Triplet Loss:</strong><br />
+Anchor (query), positive (relevant), negative (irrelevant) — push positive closer, negative farther in embedding space. Classic metric learning.</p>
+<p><strong>Sequence Classifier:</strong><br />
+Treat matching as classification (match / no-match) on top of encoder — good when you have clear labels.</p>
+<p><strong>Short answer:</strong><br />
+I evaluated all three on SSIC/SSOC data and picked what performed best on our <strong>custom evaluation benchmarks</strong>, then ensembled top checkpoints.</p>
+<hr />
+<h3>Q: What is QLoRA?</h3>
+<p><strong>Short answer:</strong><br />
+<strong>Quantized Low-Rank Adaptation</strong> — fine-tune large models efficiently by:<br />
+1. Quantizing base model weights (e.g. 4-bit)<br />
+2. Training small low-rank adapter matrices<br />
+3. Much less GPU memory → fine-tune bigger models on fewer GPUs  </p>
+<p>Used for parameter-efficient embedding/LLM fine-tuning at DOS.</p>
+<hr />
+<h3>Q: Why Ray for fine-tuning?</h3>
+<p><strong>Short answer:</strong><br />
+Ray scales training across multiple GPUs/nodes — distributed data loading, hyperparameter trials, and parallel experiments. Useful when comparing MNRL vs Triplet Loss vs classifier heads on large domain datasets.</p>
+<hr />
+<h3>Q: What are ensemble methods for embeddings?</h3>
+<p><strong>Short answer:</strong><br />
+Combined top-performing checkpoints (e.g. average embeddings, voting, or learned fusion) to squeeze more accuracy than any single model — part of how we achieved 5%+ gain on SSIC/SSOC tasks.</p>
+<hr />
+<h3>Q: How did you evaluate embedding quality?</h3>
+<p><strong>Short answer:</strong><br />
+Built <strong>custom benchmarks</strong> aligned to SSIC/SSOC matching tasks — precision@k, recall@k, MRR, or classification accuracy on held-out domain pairs. Compared baseline vs fine-tuned vs ensemble before production promotion.</p>
+<hr />
+<h1>5. DOS — SageMaker, MLOps &amp; Full-Stack AI</h1>
+<h3>Q: How did you use SageMaker?</h3>
+<p><strong>Short answer:</strong><br />
+Owned training, inference endpoints, and deployment for production ML workloads — model artifacts, endpoint scaling, integration with applications and CI/CD templates.</p>
+<hr />
+<h3>Q: What CI/CD pipeline templates did you design for AI/ML?</h3>
+<p><strong>Short answer:</strong><br />
+Reusable templates so downstream teams plug in domain logic but share standardized <strong>build, test, deploy</strong> patterns — model validation gates, container builds, deployment to SageMaker or internal infra, security scans, version tagging.</p>
+<p><strong>Follow-up — What gates before production?</strong><br />
+Data/schema checks, unit tests, model metric thresholds vs baseline, integration tests, approval for promote to prod.</p>
+<hr />
+<h3>Q: Describe the full-stack AI app you built (React + FastAPI).</h3>
+<p><strong>Short answer:</strong><br />
+React frontend + Python/FastAPI backend supporting:<br />
+- Dataset upload<br />
+- Exploratory data analysis (EDA)<br />
+- ML training workflows<br />
+- AI-powered user workflows  </p>
+<p>Bridge between data scientists and production users in DOS.</p>
+<hr />
+<h3>Q: PyTorch vs TensorFlow — what did you use when?</h3>
+<p><strong>Short answer:</strong><br />
+<strong>PyTorch</strong> for research-style work (thesis CNNs, Hugging Face ecosystem, fine-tuning). <strong>TensorFlow</strong> where legacy pipelines or team standards required it. At DOS both appeared in training/serving paths — I'm comfortable in either; PyTorch is primary for LLM/embedding work.</p>
+<hr />
+<h1>6. DOS — AWS MWAA &amp; Web Scraping Platform</h1>
+<h3>Q: Tell me about the web scraping platform on AWS MWAA.</h3>
+<p><strong>Short answer:</strong><br />
+I single-handedly delivered a web scraping platform orchestrated with <strong>AWS MWAA (Managed Airflow)</strong> — HA design, VPC with PSN and public subnets, <strong>WOG AD</strong> integration, and <strong>AWS Cognito</strong> for auth.</p>
+<hr />
+<h3>Q: Why MWAA / Airflow?</h3>
+<p><strong>Short answer:</strong><br />
+Scraping is inherently scheduled, retry-heavy, and DAG-based — fetch, parse, store, validate. Airflow gives observability, dependency management, and backfill. MWAA is managed Airflow on AWS — less ops than self-hosted.</p>
+<hr />
+<h3>Q: Explain the HA architecture briefly.</h3>
+<p><strong>Short answer:</strong><br />
+Multi-AZ VPC, redundant Airflow components (per MWAA design), durable metadata DB, task retries, idempotent workers, monitoring/alerting. PSN (government network) vs public subnet separation for security compliance.</p>
+<hr />
+<h1>7. GovTech — Camunda &amp; Offboarding</h1>
+<h3>Q: Tell me about the Offboarding module you owned.</h3>
+<p><strong>Short answer:</strong><br />
+<strong>Sole ownership end-to-end</strong> at GovTech: Camunda BPMN workflows + Spring Boot/Kotlin REST APIs + React/TypeScript UI for government workforce offboarding — from process design to production.</p>
+<p><strong>Why it matters:</strong> Shows full-stack + workflow + government domain + independent delivery.</p>
+<hr />
+<h3>Q: Camunda 7 vs Camunda 8 — differences?</h3>
+<table>
+<thead>
+<tr>
+<th>Camunda 7</th>
+<th>Camunda 8</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Java stack, embedded or shared engine</td>
+<td>Cloud-native, Zeebe broker</td>
+</tr>
+<tr>
+<td>BPMN 2.0</td>
+<td>BPMN 2.0 + new execution semantics</td>
+</tr>
+<tr>
+<td>REST API, job executor</td>
+<td>gRPC, partitions, exporters</td>
+</tr>
+<tr>
+<td>Mature on-prem</td>
+<td>Scalable distributed architecture</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Short answer:</strong><br />
+At GovTech I worked on <strong>both</strong> — Camunda 7 for existing flows; evaluated and deployed <strong>Camunda 8</strong> for complex cases (escalation events, message events, customization). Managed flows via Modeler, Cockpit, Operate.</p>
+<hr />
+<h3>Q: What BPMN elements did you use in complex cases?</h3>
+<p><strong>Short answer:</strong><br />
+User tasks, service tasks, gateways (exclusive/parallel), <strong>message events</strong>, <strong>escalation events</strong>, timers, subprocesses, boundary events for SLA escalation — especially in Camunda 8 evaluation for government services.</p>
+<hr />
+<h3>Q: You improved user satisfaction by 20% — how?</h3>
+<p><strong>Short answer:</strong><br />
+BPM 2.0 process redesign on Camunda — clearer task flows, better error handling, faster feedback to users, reduced manual steps. Measured via user satisfaction surveys or service metrics before/after process improvements.</p>
+<p><em>(Be ready to explain what specifically changed in the process.)</em></p>
+<hr />
+<h3>Q: What is DMN and did you use it?</h3>
+<p><strong>Short answer:</strong><br />
+<strong>DMN (Decision Model and Notation)</strong> — table-based business rules (e.g. loan eligibility, routing rules). Used at Hitachi and Camunda projects; pairs with BPMN so decisions are versioned separately from process flow.</p>
+<hr />
+<h1>8. GovTech — Spring Boot, Kotlin &amp; Integrations</h1>
+<h3>Q: Why Kotlin over Java at GovTech?</h3>
+<p><strong>Short answer:</strong><br />
+Null safety, concise data classes, coroutines potential, team preference on modern GovTech stack — interoperates fully with Java/Spring ecosystem. Same Spring Boot patterns: REST APIs, JPA, testing.</p>
+<hr />
+<h3>Q: Describe async processing with Lambda, SQS, EventBridge.</h3>
+<p><strong>Short answer:</strong><br />
+Long-running or decoupled work shouldn't block HTTP threads. Spring Boot publishes events → <strong>EventBridge</strong> routes → <strong>Lambda</strong> or consumers process → <strong>SQS</strong> for buffering and retries. Event-driven integration between gov services.</p>
+<p><strong>Example flow:</strong><br />
+API accepts offboarding request → writes DB → publishes event → async workers send notifications, update external systems.</p>
+<hr />
+<h3>Q: How did you optimize Excel report generation (1 min → under 20 sec)?</h3>
+<p><strong>Short answer:</strong><br />
+For 8,000+ records — likely combined:<br />
+- Streaming/chunked writes instead of loading all in memory<br />
+- Reduced redundant DB queries (batch fetch, projections)<br />
+- Async generation where appropriate<br />
+- Library tuning (e.g. SXSSF for large Excel)<br />
+- Caching static reference data  </p>
+<p><em>(Prepare your exact technical changes — interviewers will ask.)</em></p>
+<hr />
+<h3>Q: Kotlin data migration utility — what did it do?</h3>
+<p><strong>Short answer:</strong><br />
+REST APIs + Kotlin utility to migrate CSV and onboard data into <strong>APEX</strong> — standardized ingestion, validation, 15% cost savings by reducing manual data handling.</p>
+<hr />
+<h3>Q: React dashboards — RTK Query, OpenSearch, Slack alerts?</h3>
+<p><strong>Short answer:</strong><br />
+Built React/Redux/TypeScript dashboards with <strong>RTK Query</strong> for API caching/fetching. Integrated <strong>OpenSearch</strong> for search/log analytics. Automated <strong>Slack</strong> alerts for 50+ developers using <strong>Mustache</strong> templates for consistent notification formatting.</p>
+<hr />
+<h1>9. Earlier Roles — FedEx &amp; Hitachi</h1>
+<h3>Q: What did you do at FedEx (Accolite)?</h3>
+<p><strong>Short answer:</strong><br />
+Full-stack pilot banking app — <strong>Java 8</strong>, <strong>Angular 8</strong>, data migration utility (20% accuracy improvement across schemas), PDF/Excel reports, <strong>NgRx</strong> state management.</p>
+<hr />
+<h3>Q: What did you do at Hitachi Vantara?</h3>
+<p><strong>Short answer:</strong><br />
+Manufacturing/coal mining (Australia):<br />
+- <strong>Camunda 7 + Spring Boot</strong> microservices with <strong>Kafka</strong> and <strong>RabbitMQ</strong><br />
+- Analytics framework for data scientists — deploy models via REST + Kafka<br />
+- Anomaly detection: code → <strong>decision-based</strong> (DMN/Camunda) + linear regression <strong>89% accuracy</strong><br />
+- <strong>Keycloak SSO</strong>, optimized Kafka consumers, <strong>Docker/Kubernetes</strong>  </p>
+<p><strong>Award:</strong> Inspiration of the Year — HPI project.</p>
+<hr />
+<h3>Q: How did you optimize Kafka consumers?</h3>
+<p><strong>Short answer:</strong><br />
+Tune <code>max.poll.records</code>, <code>max.poll.interval.ms</code>, parallel processing with idempotent handlers, proper consumer group sizing, batch processing, avoid long processing in poll loop, monitor lag, use dead-letter topics for poison messages.</p>
+<hr />
+<h3>Q: Kafka vs RabbitMQ — when did you use which at Hitachi?</h3>
+<p><strong>Short answer:</strong><br />
+<strong>Kafka</strong> — high-throughput event streaming, analytics pipeline, replay. <strong>RabbitMQ</strong> — task queues, routing to specific workers, traditional messaging. Camunda often integrates with both depending on use case.</p>
+<hr />
+<h1>10. Key Projects &amp; MSc Thesis</h1>
+<h3>Q: Camunda 8 + SageMaker loan approval project?</h3>
+<p><strong>Short answer:</strong><br />
+Trained <strong>default-prediction model</strong> on SageMaker. <strong>Camunda 8</strong> orchestrates loan approval BPMN — at decision point, call SageMaker endpoint for real-time inference → approve/reject/manual review. Published on Camunda Blog and Medium.</p>
+<p><strong>Whiteboard flow:</strong><br />
+Application submitted → Camunda process → gather data → SageMaker inference → gateway on score → human task if borderline → outcome.</p>
+<hr />
+<h3>Q: MSc thesis — BlurPool vs MaxPool?</h3>
+<p><strong>Short answer:</strong><br />
+Compared <strong>BlurPool</strong> (anti-aliasing downsampling) vs standard <strong>MaxPool</strong> in CNNs for <strong>melanoma detection</strong> on medical images. Architectures: ResNet, DenseNet, MobileNet, Inception. BlurPool reduces aliasing when downsampling feature maps — can improve generalization on medical imaging.</p>
+<hr />
+<h3>Q: How did you handle class imbalance in melanoma detection?</h3>
+<p><strong>Short answer:</strong><br />
+Techniques like weighted loss, oversampling/undersampling, data augmentation, appropriate metrics (AUC, F1, sensitivity/specificity) — medical imaging cares about missing melanoma (false negative) more than false positive.</p>
+<hr />
+<h3>Q: Medical imaging CNN project on GitHub?</h3>
+<p><strong>Short answer:</strong><br />
+github.com/satyaram413/cnn_melanoma_detection — PyTorch implementations, BlurPool experiments, reproducible training pipeline from MSc work.</p>
+<hr />
+<h1>11. Behavioral &amp; Leadership</h1>
+<h3>Q: Tell me about a time you worked independently / sole ownership.</h3>
+<p><strong>Short answer:</strong><br />
+<strong>GovTech Offboarding module</strong> — end-to-end BPMN, backend, frontend.<br />
+<strong>DOS web scraping platform</strong> — single-handed delivery on MWAA.<br />
+Shows I can own ambiguous problems without waiting for direction.</p>
+<p>Use <strong>STAR:</strong> Situation → Task → Action → Result.</p>
+<hr />
+<h3>Q: Tell me about teaching / knowledge sharing.</h3>
+<p><strong>Short answer:</strong><br />
+Co-led <strong>DOS Tech Drive</strong> on Dify agents (RAG, E2B, tool routing) — DOS-wide session, well received. At GovTech, knowledge-transfer sessions on Camunda to engineering teams. Collaborated with Camunda Technical Associates.</p>
+<hr />
+<h3>Q: Tell me about a difficult production issue.</h3>
+<p><strong>Prepare one real story:</strong><br />
+e.g. embedding model regression after fine-tune, vLLM GPU OOM under load, Camunda incident stuck workflow, Kafka consumer lag. Structure: detect → mitigate → root cause → prevent recurrence.</p>
+<hr />
+<h3>Q: How do you work with non-technical stakeholders?</h3>
+<p><strong>Short answer:</strong><br />
+DOS Tech Drive is an example — hands-on sessions for building agents, not just slides. Translate technical trade-offs (accuracy vs latency vs cost) into business terms. SSIC/SSOC work tied directly to classification accuracy stakeholders care about.</p>
+<hr />
+<h3>Q: SAFe Scrum Master certification — how do you use it?</h3>
+<p><strong>Short answer:</strong><br />
+Facilitate ceremonies, remove blockers, align teams on increments. In government projects with multiple vendors/stakeholders, structured agile helps deliver AI and workflow features predictably.</p>
+<hr />
+<h1>12. Certifications &amp; Skills Validation</h1>
+<h3>Q: OCI Generative AI Professional — what did you learn?</h3>
+<p><strong>Short answer:</strong><br />
+Oracle Cloud Gen AI services, model deployment on OCI, RAG patterns, security and integration on OCI — complements hands-on DOS private-cloud LLM work.</p>
+<hr />
+<h3>Q: Azure AI Fundamentals?</h3>
+<p><strong>Short answer:</strong><br />
+Foundational ML/AI concepts on Azure — Cognitive Services, Azure ML basics, responsible AI. Breadth certification; DOS work was heavier on AWS/OCI/private cloud.</p>
+<hr />
+<h3>Q: Hugging Face Agents course?</h3>
+<p><strong>Short answer:</strong><br />
+Agent architectures, tool use, HF ecosystem — directly applied in LangChain/Dify/MCP agent work at DOS.</p>
+<hr />
+<h3>Q: Redis RU101?</h3>
+<p><strong>Short answer:</strong><br />
+Redis data structures — strings, hashes, lists, sets, sorted sets. Useful for caching embeddings, session state, rate limiting in API/LLM serving layers.</p>
+<hr />
+<h3>Q: How do you stay current in AI?</h3>
+<p><strong>Short answer:</strong><br />
+Hands-on projects (DOS production), HF/OCI courses, Camunda/blog publications, GitHub (melanoma CNN), internal tech drives, following inference (vLLM), RAG, and agent frameworks (MCP, Dify).</p>
+<hr />
+<h1>Quick-Fire Round (rapid answers)</h1>
+<table>
+<thead>
+<tr>
+<th>Topic</th>
+<th>One-line answer</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>vLLM</td>
+<td>High-throughput LLM inference with PagedAttention + continuous batching</td>
+</tr>
+<tr>
+<td>RAG</td>
+<td>Retrieve docs → augment prompt → generate grounded answer</td>
+</tr>
+<tr>
+<td>MCP</td>
+<td>Standard protocol for LLM tool/data integration</td>
+</tr>
+<tr>
+<td>QLoRA</td>
+<td>Efficient fine-tuning with quantized base + low-rank adapters</td>
+</tr>
+<tr>
+<td>MNRL</td>
+<td>In-batch negative ranking loss for retrieval training</td>
+</tr>
+<tr>
+<td>SSIC/SSOC</td>
+<td>Singapore industry/occupation codes — domain embedding fine-tune</td>
+</tr>
+<tr>
+<td>Camunda 8</td>
+<td>Cloud-native Zeebe-based BPMN engine</td>
+</tr>
+<tr>
+<td>GCC+</td>
+<td>Singapore government commercial cloud plus security controls</td>
+</tr>
+<tr>
+<td>MWAA</td>
+<td>Managed Apache Airflow on AWS</td>
+</tr>
+<tr>
+<td>BlurPool</td>
+<td>Anti-aliased pooling for CNN downsampling</td>
+</tr>
+<tr>
+<td>Ensemble embeddings</td>
+<td>Combine best checkpoints for higher retrieval accuracy</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h1>Questions YOU should ask the interviewer</h1>
+<ol>
+<li>What does the ML/LLM stack look like today — training vs inference split?  </li>
+<li>How do you evaluate RAG/agents before production?  </li>
+<li>Team balance: research vs platform vs product engineering?  </li>
+<li>Cloud and data residency requirements?  </li>
+<li>Biggest bottleneck: model quality, latency, cost, or compliance?  </li>
+</ol>
+<hr />
+<p><em>Document generated from resume: Maka_Sitaram_AI_Engineer_Resume.pdf</em><br />
+<em>Practice aloud — short answer first, then depth.</em></p></body></html>

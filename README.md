@@ -58,7 +58,8 @@ A structured reference guide for full-stack Java interviews covering core Java, 
 7. [Mock Interview Cheat Sheet](#mock-interview-cheat-sheet)
 8. [3-Day Study Plan](#3-day-study-plan)
 9. [Bonus Q&A — Streams, Collections, Enums, Spring REST](JAVA_BONUS_QA.md)
-10. [Further Reading](#further-reading)
+10. [Resume-Based Interview Q&A](RESUME_INTERVIEW_QA.md) · [PDF](RESUME_INTERVIEW_QA.pdf)
+11. [Further Reading](#further-reading)
 
 ---
 
